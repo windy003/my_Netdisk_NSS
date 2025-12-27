@@ -330,7 +330,7 @@
             border-radius: 8px;
             cursor: pointer;
             position: relative;
-            height: 180px;
+            height: 220px;
         }
 
         .file-list.grid-view .file-item:hover {
@@ -360,8 +360,13 @@
             font-size: 13px;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            white-space: normal;
             width: 100%;
+            line-height: 1.4;
+            max-height: 36px;
         }
 
         .file-list.grid-view .file-name a {
@@ -370,7 +375,8 @@
 
         .file-list.grid-view .file-size {
             font-size: 11px;
-            margin-top: 3px;
+            margin-top: 5px;
+            color: #999;
         }
 
         .file-list.grid-view .menu-btn {
@@ -453,7 +459,12 @@
             }
 
             .file-list.grid-view .file-item {
-                height: 150px;
+                display: flex;
+                flex-direction: column;
+                flex-wrap: nowrap;
+                justify-content: flex-start;
+                align-items: center;
+                height: 180px;
                 padding: 10px;
             }
 
@@ -463,6 +474,21 @@
 
             .file-list.grid-view .file-thumbnail {
                 height: 100px;
+            }
+
+            .file-list.grid-view .file-info {
+                position: relative;
+                margin-top: auto;
+            }
+
+            .file-list.grid-view .file-name {
+                font-size: 12px;
+                line-height: 1.3;
+                max-height: 32px;
+            }
+
+            .file-list.grid-view .file-size {
+                font-size: 10px;
             }
         }
     </style>
