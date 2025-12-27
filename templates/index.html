@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件浏览器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            color: #333;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: #dc3545;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .breadcrumb {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .breadcrumb a {
+            color: #667eea;
+            text-decoration: none;
+            margin-right: 5px;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb span {
+            margin: 0 5px;
+            color: #999;
+        }
+
+        .actions {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .file-list {
+            background: white;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.3s;
+        }
+
+        .file-item:hover {
+            background: #f9f9f9;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            width: 30px;
+            text-align: center;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 5px;
+            word-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+        }
+
+        .file-name a {
+            color: #333;
+            text-decoration: none;
+        }
+
+        .file-name a:hover {
+            color: #667eea;
+        }
+
+        .file-size {
+            font-size: 13px;
+            color: #999;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #138496;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .alert {
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .menu-btn {
+            display: none;
+            background: #667eea;
+            color: white;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background 0.3s;
+        }
+
+        .menu-btn:hover {
+            background: #5568d3;
+        }
+
+        /* 视图切换按钮激活状态 */
+        .btn.view-active {
+            background: #4d4d4d;
+        }
+
+        /* 网格视图样式 */
+        .file-list.grid-view {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            padding: 20px;
+        }
+
+        .file-list.grid-view .file-item {
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            cursor: pointer;
+            position: relative;
+            height: 180px;
+        }
+
+        .file-list.grid-view .file-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-list.grid-view .file-icon {
+            font-size: 48px;
+            margin: 0 0 10px 0;
+        }
+
+        .file-list.grid-view .file-thumbnail {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background: #f5f5f5;
+        }
+
+        .file-list.grid-view .file-info {
+            text-align: center;
+            width: 100%;
+        }
+
+        .file-list.grid-view .file-name {
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            width: 100%;
+        }
+
+        .file-list.grid-view .file-name a {
+            display: block;
+        }
+
+        .file-list.grid-view .file-size {
+            font-size: 11px;
+            margin-top: 3px;
+        }
+
+        .file-list.grid-view .menu-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 28px;
+            height: 28px;
+            font-size: 16px;
+            padding: 0;
+        }
+
+        .file-list.grid-view .file-actions {
+            display: none;
+            position: absolute;
+            top: 40px;
+            right: 5px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            padding: 5px;
+            z-index: 100;
+            flex-direction: column;
+            width: auto;
+            min-width: 120px;
+        }
+
+        .file-list.grid-view .file-actions.show {
+            display: flex;
+        }
+
+        .file-list.grid-view .file-actions .btn-sm {
+            margin: 3px 0;
+            width: 100%;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        /* 移动端样式 */
+        @media (max-width: 768px) {
+            .file-item {
+                flex-wrap: wrap;
+                position: relative;
+            }
+
+            .file-info {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .menu-btn {
+                display: block;
+            }
+
+            .file-actions {
+                display: none;
+                width: 100%;
+                margin-top: 10px;
+                padding-top: 10px;
+                border-top: 1px solid #f0f0f0;
+                flex-wrap: wrap;
+            }
+
+            .file-actions.show {
+                display: flex;
+            }
+
+            .file-actions .btn-sm {
+                flex: 1;
+                min-width: calc(50% - 5px);
+                text-align: center;
+            }
+
+            /* 移动端网格视图 */
+            .file-list.grid-view {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 10px;
+                padding: 15px;
+            }
+
+            .file-list.grid-view .file-item {
+                height: 150px;
+                padding: 10px;
+            }
+
+            .file-list.grid-view .file-icon {
+                font-size: 36px;
+            }
+
+            .file-list.grid-view .file-thumbnail {
+                height: 100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>文件浏览器</h1>
+        <a href="{{ url_for('logout') }}" class="logout-btn">退出登录</a>
+    </div>
+
+    <div class="container">
+        <div class="breadcrumb">
+            <a href="{{ url_for('index') }}">首页</a>
+            {% for crumb in breadcrumbs %}
+                <span>/</span>
+                <a href="{{ url_for('index', subpath=crumb.path) }}">{{ crumb.name }}</a>
+            {% endfor %}
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" onclick="openUploadModal()">上传文件</button>
+            <button class="btn btn-success" onclick="openMkdirModal()">创建文件夹</button>
+            <div style="margin-left: auto; display: flex; gap: 5px;">
+                <button class="btn btn-secondary" id="listViewBtn" onclick="switchView('list')" title="列表视图">☰</button>
+                <button class="btn btn-secondary" id="gridViewBtn" onclick="switchView('grid')" title="网格视图">⊞</button>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div id="alertContainer"></div>
+
+        <div class="file-list">
+            {% if items %}
+                {% for item in items %}
+                    <div class="file-item" data-type="{{ item.file_type if not item.is_dir else 'folder' }}">
+                        {% if item.file_type == 'image' %}
+                            <img class="file-thumbnail" src="{{ url_for('stream', filepath=item.path) }}" alt="{{ item.name }}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        {% endif %}
+                        <div class="file-icon" {% if item.file_type == 'image' %}style="display:none;"{% endif %}>
+                            {% if item.is_dir %}
+                                📁
+                            {% elif item.file_type == 'audio' %}
+                                🎵
+                            {% elif item.file_type == 'video' %}
+                                🎬
+                            {% elif item.file_type == 'image' %}
+                                🖼️
+                            {% elif item.file_type == 'pdf' %}
+                                📕
+                            {% else %}
+                                📄
+                            {% endif %}
+                        </div>
+                        <div class="file-info">
+                            <div class="file-name">
+                                {% if item.is_dir %}
+                                    <a href="{{ url_for('index', subpath=item.path) }}">{{ item.name }}</a>
+                                {% elif item.file_type == 'audio' or item.file_type == 'video' %}
+                                    <a href="{{ url_for('play', filepath=item.path) }}">{{ item.name }}</a>
+                                {% elif item.file_type == 'image' %}
+                                    <a href="{{ url_for('view', filepath=item.path) }}">{{ item.name }}</a>
+                                {% else %}
+                                    <a href="{{ url_for('download', filepath=item.path) }}">{{ item.name }}</a>
+                                {% endif %}
+                            </div>
+                            {% if not item.is_dir %}
+                                <div class="file-size">{{ item.size | format_size }}</div>
+                            {% endif %}
+                        </div>
+                        <button class="menu-btn" onclick="toggleActions(this)">⋮</button>
+                        <div class="file-actions">
+                            {% if not item.is_dir %}
+                                {% if item.file_type == 'audio' or item.file_type == 'video' %}
+                                    <a href="{{ url_for('play', filepath=item.path) }}" class="btn btn-success btn-sm">播放</a>
+                                {% elif item.file_type == 'image' %}
+                                    <a href="{{ url_for('view', filepath=item.path) }}" class="btn btn-success btn-sm">查看</a>
+                                {% endif %}
+                                <a href="{{ url_for('download', filepath=item.path) }}" class="btn btn-info btn-sm">下载</a>
+                            {% endif %}
+                            <button class="btn btn-secondary btn-sm" onclick="openRenameModal('{{ item.path }}', '{{ item.name }}')">重命名</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteItem('{{ item.path }}', '{{ item.name }}')">删除</button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">📂</div>
+                    <p>此目录为空</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 上传模态框 -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <h3>上传文件</h3>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="fileInput">选择文件</label>
+                    <input type="file" id="fileInput" name="file" required>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="closeUploadModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">上传</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 创建文件夹模态框 -->
+    <div id="mkdirModal" class="modal">
+        <div class="modal-content">
+            <h3>创建文件夹</h3>
+            <form id="mkdirForm">
+                <div class="form-group">
+                    <label for="dirNameInput">文件夹名称</label>
+                    <input type="text" id="dirNameInput" name="dirname" required>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="closeMkdirModal()">取消</button>
+                    <button type="submit" class="btn btn-success">创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 重命名模态框 -->
+    <div id="renameModal" class="modal">
+        <div class="modal-content">
+            <h3>重命名</h3>
+            <form id="renameForm">
+                <div class="form-group">
+                    <label for="newNameInput">新名称</label>
+                    <input type="text" id="newNameInput" name="new_name" required>
+                </div>
+                <input type="hidden" id="renamePathInput" name="path">
+                <div class="modal-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="closeRenameModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">确定</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const currentPath = "{{ current_path }}";
+
+        // 视图切换功能
+        function switchView(viewType) {
+            const fileList = document.querySelector('.file-list');
+            const listViewBtn = document.getElementById('listViewBtn');
+            const gridViewBtn = document.getElementById('gridViewBtn');
+
+            if (viewType === 'grid') {
+                fileList.classList.add('grid-view');
+                listViewBtn.classList.remove('view-active');
+                gridViewBtn.classList.add('view-active');
+                localStorage.setItem('fileViewMode', 'grid');
+
+                // 显示图片缩略图
+                document.querySelectorAll('.file-item').forEach(item => {
+                    const thumbnail = item.querySelector('.file-thumbnail');
+                    const icon = item.querySelector('.file-icon');
+                    if (thumbnail) {
+                        thumbnail.style.display = 'block';
+                        icon.style.display = 'none';
+                    }
+                });
+            } else {
+                fileList.classList.remove('grid-view');
+                listViewBtn.classList.add('view-active');
+                gridViewBtn.classList.remove('view-active');
+                localStorage.setItem('fileViewMode', 'list');
+
+                // 隐藏图片缩略图（在列表视图中）
+                document.querySelectorAll('.file-item').forEach(item => {
+                    const thumbnail = item.querySelector('.file-thumbnail');
+                    const icon = item.querySelector('.file-icon');
+                    if (thumbnail) {
+                        thumbnail.style.display = 'none';
+                        icon.style.display = 'block';
+                    }
+                });
+            }
+        }
+
+        // 页面加载时恢复用户的视图偏好
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedView = localStorage.getItem('fileViewMode') || 'list';
+            switchView(savedView);
+        });
+
+        function toggleActions(button) {
+            const fileItem = button.closest('.file-item');
+            const actions = fileItem.querySelector('.file-actions');
+
+            // 关闭其他已打开的菜单
+            document.querySelectorAll('.file-actions.show').forEach(el => {
+                if (el !== actions) {
+                    el.classList.remove('show');
+                }
+            });
+
+            // 切换当前菜单
+            actions.classList.toggle('show');
+        }
+
+        // 点击其他地方关闭菜单
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-item')) {
+                document.querySelectorAll('.file-actions.show').forEach(el => {
+                    el.classList.remove('show');
+                });
+            }
+        });
+
+        function showAlert(message, type) {
+            const alertContainer = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alertContainer.appendChild(alert);
+
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        function openUploadModal() {
+            document.getElementById('uploadModal').classList.add('active');
+        }
+
+        function closeUploadModal() {
+            document.getElementById('uploadModal').classList.remove('active');
+            document.getElementById('uploadForm').reset();
+        }
+
+        function openMkdirModal() {
+            document.getElementById('mkdirModal').classList.add('active');
+        }
+
+        function closeMkdirModal() {
+            document.getElementById('mkdirModal').classList.remove('active');
+            document.getElementById('mkdirForm').reset();
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData();
+            formData.append('file', document.getElementById('fileInput').files[0]);
+            formData.append('path', currentPath);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    closeUploadModal();
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('上传失败: ' + error.message, 'error');
+            }
+        });
+
+        document.getElementById('mkdirForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData();
+            formData.append('dirname', document.getElementById('dirNameInput').value);
+            formData.append('path', currentPath);
+
+            try {
+                const response = await fetch('/mkdir', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    closeMkdirModal();
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('创建失败: ' + error.message, 'error');
+            }
+        });
+
+        async function deleteItem(path, name) {
+            if (!confirm(`确定要删除 "${name}" 吗？`)) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('path', path);
+
+            try {
+                const response = await fetch('/delete', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        function openRenameModal(path, currentName) {
+            document.getElementById('newNameInput').value = currentName;
+            document.getElementById('renamePathInput').value = path;
+            document.getElementById('renameModal').classList.add('active');
+            document.getElementById('newNameInput').focus();
+            document.getElementById('newNameInput').select();
+        }
+
+        function closeRenameModal() {
+            document.getElementById('renameModal').classList.remove('active');
+            document.getElementById('renameForm').reset();
+        }
+
+        document.getElementById('renameForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData();
+            formData.append('path', document.getElementById('renamePathInput').value);
+            formData.append('new_name', document.getElementById('newNameInput').value);
+
+            try {
+                const response = await fetch('/rename', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    closeRenameModal();
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('重命名失败: ' + error.message, 'error');
+            }
+        });
+
+        // 点击模态框外部关闭
+        document.getElementById('uploadModal').addEventListener('click', (e) => {
+            if (e.target.id === 'uploadModal') {
+                closeUploadModal();
+            }
+        });
+
+        document.getElementById('mkdirModal').addEventListener('click', (e) => {
+            if (e.target.id === 'mkdirModal') {
+                closeMkdirModal();
+            }
+        });
+
+        document.getElementById('renameModal').addEventListener('click', (e) => {
+            if (e.target.id === 'renameModal') {
+                closeRenameModal();
+            }
+        });
+    </script>
+</body>
+</html>
