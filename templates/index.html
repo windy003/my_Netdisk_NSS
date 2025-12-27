@@ -685,6 +685,31 @@
             }
         });
 
+        // 网格视图下点击文件卡片进行导航
+        function handleGridItemClick(e) {
+            const fileList = document.querySelector('.file-list');
+            if (!fileList.classList.contains('grid-view')) {
+                return; // 只在网格视图下启用
+            }
+
+            const fileItem = e.target.closest('.file-item');
+            if (!fileItem) return;
+
+            // 如果点击的是按钮或链接，不处理
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.file-actions')) {
+                return;
+            }
+
+            // 获取文件项中的主链接并导航
+            const link = fileItem.querySelector('.file-name a');
+            if (link) {
+                window.location.href = link.href;
+            }
+        }
+
+        // 为所有文件项添加点击事件
+        document.addEventListener('click', handleGridItemClick);
+
         function showAlert(message, type) {
             const alertContainer = document.getElementById('alertContainer');
             const alert = document.createElement('div');
