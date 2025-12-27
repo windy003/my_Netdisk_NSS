@@ -3,6 +3,7 @@ import re
 import secrets
 from pathlib import Path
 from functools import wraps
+from datetime import timedelta
 from flask import Flask, render_template, request, send_file, redirect, url_for, session, flash, abort, jsonify
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -13,6 +14,9 @@ load_dotenv(override=True)
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(16))
+
+# 设置会话持久化时间为30天
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
 # 从环境变量读取配置
 CONFIG = {
@@ -140,6 +144,7 @@ def login():
         password = request.form.get('password')
 
         if username == CONFIG['USERNAME'] and check_password_hash(CONFIG['PASSWORD_HASH'], password):
+            session.permanent = True  # 设置为持久会话
             session['logged_in'] = True
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
