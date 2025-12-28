@@ -490,6 +490,104 @@
             .file-list.grid-view .file-size {
                 font-size: 10px;
             }
+
+            .mini-player {
+                padding: 10px !important;
+            }
+
+            .mini-player-info {
+                font-size: 12px !important;
+            }
+
+            .mini-player-controls button {
+                padding: 8px 12px !important;
+                font-size: 16px !important;
+            }
+        }
+
+        /* 底部音频播放器样式 */
+        .mini-player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+            display: none;
+            z-index: 1000;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .mini-player.active {
+            display: flex;
+        }
+
+        .mini-player-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .mini-player-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .mini-player-progress {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .mini-player-progress input[type="range"] {
+            flex: 1;
+            height: 4px;
+        }
+
+        .mini-player-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .mini-player-controls button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background 0.3s;
+        }
+
+        .mini-player-controls button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .mini-player-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .mini-player-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* 为了给底部播放器留出空间 */
+        body.player-active {
+            padding-bottom: 100px;
         }
     </style>
 </head>
@@ -556,7 +654,9 @@
                             <div class="file-name">
                                 {% if item.is_dir %}
                                     <a href="{{ url_for('index', subpath=item.path) }}">{{ item.name }}</a>
-                                {% elif item.file_type == 'audio' or item.file_type == 'video' %}
+                                {% elif item.file_type == 'audio' %}
+                                    <a href="#" onclick="playAudio('{{ url_for('stream', filepath=item.path) }}', '{{ item.name }}'); return false;">{{ item.name }}</a>
+                                {% elif item.file_type == 'video' %}
                                     <a href="{{ url_for('play', filepath=item.path) }}">{{ item.name }}</a>
                                 {% elif item.file_type == 'image' %}
                                     <a href="{{ url_for('view', filepath=item.path) }}">{{ item.name }}</a>
@@ -571,7 +671,9 @@
                         <button class="menu-btn" onclick="toggleActions(this)">⋮</button>
                         <div class="file-actions">
                             {% if not item.is_dir %}
-                                {% if item.file_type == 'audio' or item.file_type == 'video' %}
+                                {% if item.file_type == 'audio' %}
+                                    <button class="btn btn-success btn-sm" onclick="playAudio('{{ url_for('stream', filepath=item.path) }}', '{{ item.name }}'); event.stopPropagation();">播放</button>
+                                {% elif item.file_type == 'video' %}
                                     <a href="{{ url_for('play', filepath=item.path) }}" class="btn btn-success btn-sm">播放</a>
                                 {% elif item.file_type == 'image' %}
                                     <a href="{{ url_for('view', filepath=item.path) }}" class="btn btn-success btn-sm">查看</a>
@@ -592,6 +694,25 @@
                 </div>
             {% endif %}
         </div>
+    </div>
+
+    <!-- 底部音频播放器 -->
+    <div id="miniPlayer" class="mini-player">
+        <div class="mini-player-info">
+            <div class="mini-player-title" id="playerTitle">未播放</div>
+            <div class="mini-player-progress">
+                <span id="currentTime">0:00</span>
+                <input type="range" id="progressBar" min="0" max="100" value="0">
+                <span id="duration">0:00</span>
+            </div>
+        </div>
+        <div class="mini-player-controls">
+            <button onclick="previousTrack()" title="上一首">⏮</button>
+            <button id="playPauseBtn" onclick="togglePlayPause()" title="播放/暂停">▶️</button>
+            <button onclick="nextTrack()" title="下一首">⏭</button>
+        </div>
+        <button class="mini-player-close" onclick="closeMiniPlayer()" title="关闭">✕</button>
+        <audio id="audioPlayer"></audio>
     </div>
 
     <!-- 上传模态框 -->
@@ -668,6 +789,173 @@
 
     <script>
         const currentPath = "{{ current_path }}";
+
+        // ============ 音频播放器管理 ============
+        const audioPlayer = document.getElementById('audioPlayer');
+        const miniPlayer = document.getElementById('miniPlayer');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const progressBar = document.getElementById('progressBar');
+        const currentTimeSpan = document.getElementById('currentTime');
+        const durationSpan = document.getElementById('duration');
+        const playerTitle = document.getElementById('playerTitle');
+
+        let playlist = [];
+        let currentTrackIndex = -1;
+
+        // 保存播放器状态到 localStorage
+        function savePlayerState() {
+            if (audioPlayer.src) {
+                const playerState = {
+                    src: audioPlayer.src,
+                    title: playerTitle.textContent,
+                    currentTime: audioPlayer.currentTime,
+                    isPlaying: !audioPlayer.paused,
+                    isActive: miniPlayer.classList.contains('active')
+                };
+                localStorage.setItem('audioPlayerState', JSON.stringify(playerState));
+            }
+        }
+
+        // 从 localStorage 恢复播放器状态
+        function restorePlayerState() {
+            const savedState = localStorage.getItem('audioPlayerState');
+            if (savedState) {
+                try {
+                    const playerState = JSON.parse(savedState);
+                    if (playerState.isActive && playerState.src) {
+                        audioPlayer.src = playerState.src;
+                        playerTitle.textContent = playerState.title;
+                        miniPlayer.classList.add('active');
+                        document.body.classList.add('player-active');
+
+                        // 等待音频加载后设置播放位置
+                        audioPlayer.addEventListener('loadedmetadata', function setTime() {
+                            if (playerState.currentTime) {
+                                audioPlayer.currentTime = playerState.currentTime;
+                            }
+                            if (playerState.isPlaying) {
+                                audioPlayer.play().catch(err => {
+                                    console.log('自动播放被阻止:', err);
+                                    playPauseBtn.textContent = '▶️';
+                                });
+                            }
+                            audioPlayer.removeEventListener('loadedmetadata', setTime);
+                        }, { once: true });
+                    }
+                } catch (error) {
+                    console.error('恢复播放器状态失败:', error);
+                    localStorage.removeItem('audioPlayerState');
+                }
+            }
+        }
+
+        // 播放音频
+        function playAudio(audioUrl, title) {
+            audioPlayer.src = audioUrl;
+            playerTitle.textContent = title;
+            audioPlayer.play();
+            miniPlayer.classList.add('active');
+            document.body.classList.add('player-active');
+            playPauseBtn.textContent = '⏸';
+            savePlayerState();
+        }
+
+        // 播放/暂停切换
+        function togglePlayPause() {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                playPauseBtn.textContent = '⏸';
+            } else {
+                audioPlayer.pause();
+                playPauseBtn.textContent = '▶️';
+            }
+            savePlayerState();
+        }
+
+        // 关闭播放器
+        function closeMiniPlayer() {
+            audioPlayer.pause();
+            audioPlayer.src = '';
+            miniPlayer.classList.remove('active');
+            document.body.classList.remove('player-active');
+            playPauseBtn.textContent = '▶️';
+            localStorage.removeItem('audioPlayerState');
+        }
+
+        // 上一首
+        function previousTrack() {
+            if (currentTrackIndex > 0) {
+                currentTrackIndex--;
+                const track = playlist[currentTrackIndex];
+                playAudio(track.url, track.name);
+            }
+        }
+
+        // 下一首
+        function nextTrack() {
+            if (currentTrackIndex < playlist.length - 1) {
+                currentTrackIndex++;
+                const track = playlist[currentTrackIndex];
+                playAudio(track.url, track.name);
+            }
+        }
+
+        // 定期保存播放进度
+        setInterval(() => {
+            if (miniPlayer.classList.contains('active') && audioPlayer.src) {
+                savePlayerState();
+            }
+        }, 5000); // 每5秒保存一次
+
+        // 页面卸载前保存状态
+        window.addEventListener('beforeunload', () => {
+            if (miniPlayer.classList.contains('active') && audioPlayer.src) {
+                savePlayerState();
+            }
+        });
+
+        // 格式化时间
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // 更新进度条
+        audioPlayer.addEventListener('timeupdate', () => {
+            if (audioPlayer.duration) {
+                const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                progressBar.value = progress;
+                currentTimeSpan.textContent = formatTime(audioPlayer.currentTime);
+            }
+        });
+
+        // 加载元数据时更新总时长
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            durationSpan.textContent = formatTime(audioPlayer.duration);
+        });
+
+        // 进度条拖动
+        progressBar.addEventListener('input', (e) => {
+            const time = (e.target.value / 100) * audioPlayer.duration;
+            audioPlayer.currentTime = time;
+        });
+
+        // 自动播放下一首
+        audioPlayer.addEventListener('ended', () => {
+            nextTrack();
+        });
+
+        // 播放状态变化
+        audioPlayer.addEventListener('play', () => {
+            playPauseBtn.textContent = '⏸';
+            savePlayerState();
+        });
+
+        audioPlayer.addEventListener('pause', () => {
+            playPauseBtn.textContent = '▶️';
+            savePlayerState();
+        });
 
         // 剪贴板管理
         let clipboard = {
@@ -829,10 +1117,13 @@
             }
         }
 
-        // 页面加载时恢复用户的视图偏好
+        // 页面加载时恢复用户的视图偏好和播放器状态
         document.addEventListener('DOMContentLoaded', () => {
             const savedView = localStorage.getItem('fileViewMode') || 'list';
             switchView(savedView);
+
+            // 恢复音频播放器状态
+            restorePlayerState();
         });
 
         function toggleActions(button) {
