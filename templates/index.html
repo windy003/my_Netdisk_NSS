@@ -575,6 +575,8 @@
                                 {% endif %}
                                 <a href="{{ url_for('download', filepath=item.path) }}" class="btn btn-info btn-sm">下载</a>
                             {% endif %}
+                            <button class="btn btn-info btn-sm" onclick="copyItem('{{ item.path }}', '{{ item.name }}')">复制</button>
+                            <button class="btn btn-info btn-sm" onclick="cutItem('{{ item.path }}', '{{ item.name }}')">剪切</button>
                             <button class="btn btn-secondary btn-sm" onclick="openRenameModal('{{ item.path }}', '{{ item.name }}')">重命名</button>
                             <button class="btn btn-danger btn-sm" onclick="deleteItem('{{ item.path }}', '{{ item.name }}')">删除</button>
                         </div>
@@ -641,8 +643,149 @@
         </div>
     </div>
 
+    <!-- 目录选择模态框 -->
+    <div id="folderSelectModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h3 id="folderSelectTitle">选择目标文件夹</h3>
+            <div style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                <strong>操作:</strong> <span id="operationInfo"></span>
+            </div>
+            <div class="breadcrumb" id="folderBreadcrumb" style="margin-bottom: 15px;">
+                <a href="#" onclick="loadFolderContents(''); return false;">首页</a>
+            </div>
+            <div id="folderList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 5px;">
+                <!-- 文件夹列表将动态加载 -->
+            </div>
+            <div class="modal-buttons" style="margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" onclick="closeFolderSelectModal()">取消</button>
+                <button type="button" class="btn btn-primary" onclick="confirmPaste()">粘贴到此处</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const currentPath = "{{ current_path }}";
+
+        // 剪贴板管理
+        let clipboard = {
+            operation: null, // 'copy' or 'cut'
+            path: null,
+            name: null
+        };
+
+        // 当前选择的目标路径
+        let selectedDestPath = '';
+
+        // 复制文件/文件夹
+        function copyItem(path, name) {
+            clipboard = {
+                operation: 'copy',
+                path: path,
+                name: name
+            };
+            openFolderSelectModal();
+        }
+
+        // 剪切文件/文件夹
+        function cutItem(path, name) {
+            clipboard = {
+                operation: 'cut',
+                path: path,
+                name: name
+            };
+            openFolderSelectModal();
+        }
+
+        // 打开文件夹选择模态框
+        function openFolderSelectModal() {
+            const operationText = clipboard.operation === 'copy' ? '复制' : '剪切';
+            document.getElementById('operationInfo').textContent = `${operationText} "${clipboard.name}"`;
+            selectedDestPath = '';
+            loadFolderContents('');
+            document.getElementById('folderSelectModal').classList.add('active');
+        }
+
+        // 关闭文件夹选择模态框
+        function closeFolderSelectModal() {
+            document.getElementById('folderSelectModal').classList.remove('active');
+        }
+
+        // 加载文件夹内容
+        async function loadFolderContents(path) {
+            selectedDestPath = path;
+
+            try {
+                const response = await fetch(`/api/folders?path=${encodeURIComponent(path)}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    displayFolderList(result.folders, result.breadcrumbs);
+                } else {
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('加载文件夹失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示文件夹列表
+        function displayFolderList(folders, breadcrumbs) {
+            const folderList = document.getElementById('folderList');
+            const breadcrumbDiv = document.getElementById('folderBreadcrumb');
+
+            // 更新面包屑
+            breadcrumbDiv.innerHTML = '<a href="#" onclick="loadFolderContents(\'\'); return false;">首页</a>';
+            breadcrumbs.forEach(crumb => {
+                breadcrumbDiv.innerHTML += '<span>/</span>';
+                breadcrumbDiv.innerHTML += `<a href="#" onclick="loadFolderContents('${crumb.path}'); return false;">${crumb.name}</a>`;
+            });
+
+            // 更新文件夹列表
+            if (folders.length === 0) {
+                folderList.innerHTML = '<div style="padding: 40px; text-align: center; color: #999;">此目录没有子文件夹</div>';
+            } else {
+                folderList.innerHTML = folders.map(folder => `
+                    <div class="file-item" onclick="loadFolderContents('${folder.path}')" style="cursor: pointer;">
+                        <div class="file-icon">📁</div>
+                        <div class="file-info">
+                            <div class="file-name">${folder.name}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // 确认粘贴
+        async function confirmPaste() {
+            if (!clipboard.operation || !clipboard.path) {
+                showAlert('剪贴板为空', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('source_path', clipboard.path);
+            formData.append('dest_path', selectedDestPath);
+
+            try {
+                const endpoint = clipboard.operation === 'copy' ? '/copy' : '/move';
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    closeFolderSelectModal();
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('操作失败: ' + error.message, 'error');
+            }
+        }
 
         // 视图切换功能
         function switchView(viewType) {

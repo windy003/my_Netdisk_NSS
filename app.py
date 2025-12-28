@@ -429,6 +429,143 @@ def rename():
         return jsonify({'success': False, 'message': f'重命名失败: {str(e)}'}), 500
 
 
+@app.route('/api/folders', methods=['GET'])
+@login_required
+def get_folders():
+    """获取指定路径下的所有文件夹"""
+    path = request.args.get('path', '')
+
+    try:
+        current_path = get_safe_path(path)
+
+        if not current_path.exists() or not current_path.is_dir():
+            return jsonify({'success': False, 'message': '路径不存在或不是目录'}), 404
+
+        # 获取所有子文件夹
+        folders = []
+        try:
+            for item in sorted(current_path.iterdir(), key=lambda x: x.name.lower()):
+                if item.is_dir():
+                    relative_path = item.relative_to(CONFIG['SHARED_DIRECTORY'])
+                    folders.append({
+                        'name': item.name,
+                        'path': str(relative_path).replace('\\', '/')
+                    })
+        except PermissionError:
+            return jsonify({'success': False, 'message': '没有权限访问此目录'}), 403
+
+        # 构建面包屑导航
+        breadcrumbs = []
+        if path:
+            parts = Path(path).parts
+            for i, part in enumerate(parts):
+                breadcrumbs.append({
+                    'name': part,
+                    'path': '/'.join(parts[:i+1])
+                })
+
+        return jsonify({
+            'success': True,
+            'folders': folders,
+            'breadcrumbs': breadcrumbs
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取文件夹列表失败: {str(e)}'}), 500
+
+
+@app.route('/copy', methods=['POST'])
+@login_required
+def copy():
+    """复制文件或目录"""
+    import shutil
+
+    source_path = request.form.get('source_path')
+    dest_path = request.form.get('dest_path', '')
+
+    if not source_path:
+        return jsonify({'success': False, 'message': '未指定源路径'}), 400
+
+    source = get_safe_path(source_path)
+    dest_dir = get_safe_path(dest_path)
+
+    if not source.exists():
+        return jsonify({'success': False, 'message': '源文件或目录不存在'}), 404
+
+    if not dest_dir.exists() or not dest_dir.is_dir():
+        return jsonify({'success': False, 'message': '目标目录不存在'}), 400
+
+    # 构建目标路径
+    dest = dest_dir / source.name
+
+    # 检查目标是否已存在
+    if dest.exists():
+        return jsonify({'success': False, 'message': f'{source.name} 在目标目录中已存在'}), 400
+
+    # 检查是否尝试复制到自身或其子目录
+    try:
+        if source.is_dir() and dest.resolve().is_relative_to(source.resolve()):
+            return jsonify({'success': False, 'message': '不能将目录复制到其自身或子目录中'}), 400
+    except (ValueError, AttributeError):
+        # Python 3.8 及以下版本不支持 is_relative_to，使用字符串比较
+        if source.is_dir() and str(dest.resolve()).startswith(str(source.resolve())):
+            return jsonify({'success': False, 'message': '不能将目录复制到其自身或子目录中'}), 400
+
+    try:
+        if source.is_file():
+            shutil.copy2(source, dest)
+            return jsonify({'success': True, 'message': f'文件 {source.name} 已复制'})
+        else:
+            shutil.copytree(source, dest)
+            return jsonify({'success': True, 'message': f'目录 {source.name} 已复制'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'复制失败: {str(e)}'}), 500
+
+
+@app.route('/move', methods=['POST'])
+@login_required
+def move():
+    """移动文件或目录"""
+    import shutil
+
+    source_path = request.form.get('source_path')
+    dest_path = request.form.get('dest_path', '')
+
+    if not source_path:
+        return jsonify({'success': False, 'message': '未指定源路径'}), 400
+
+    source = get_safe_path(source_path)
+    dest_dir = get_safe_path(dest_path)
+
+    if not source.exists():
+        return jsonify({'success': False, 'message': '源文件或目录不存在'}), 404
+
+    if not dest_dir.exists() or not dest_dir.is_dir():
+        return jsonify({'success': False, 'message': '目标目录不存在'}), 400
+
+    # 构建目标路径
+    dest = dest_dir / source.name
+
+    # 检查目标是否已存在
+    if dest.exists():
+        return jsonify({'success': False, 'message': f'{source.name} 在目标目录中已存在'}), 400
+
+    # 检查是否尝试移动到自身或其子目录
+    try:
+        if source.is_dir() and dest.resolve().is_relative_to(source.resolve()):
+            return jsonify({'success': False, 'message': '不能将目录移动到其自身或子目录中'}), 400
+    except (ValueError, AttributeError):
+        # Python 3.8 及以下版本不支持 is_relative_to，使用字符串比较
+        if source.is_dir() and str(dest.resolve()).startswith(str(source.resolve())):
+            return jsonify({'success': False, 'message': '不能将目录移动到其自身或子目录中'}), 400
+
+    try:
+        shutil.move(str(source), str(dest))
+        item_type = '目录' if dest.is_dir() else '文件'
+        return jsonify({'success': True, 'message': f'{item_type} {source.name} 已移动'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'移动失败: {str(e)}'}), 500
+
+
 if __name__ == '__main__':
     # 确保共享目录存在
     shared_dir = Path(CONFIG['SHARED_DIRECTORY'])
