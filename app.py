@@ -1,9 +1,10 @@
 import os
 import re
 import secrets
+import json
 from pathlib import Path
 from functools import wraps
-from datetime import timedelta
+from datetime import timedelta, datetime
 from flask import Flask, render_template, request, send_file, redirect, url_for, session, flash, abort, jsonify
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -26,7 +27,9 @@ CONFIG = {
     'MAX_UPLOAD_SIZE': int(os.getenv('MAX_UPLOAD_SIZE', 500)) * 1024 * 1024,  # MB转字节
     'PORT': int(os.getenv('PORT', 5000)),
     'HOST': os.getenv('HOST', '0.0.0.0'),
-    'DEBUG': os.getenv('DEBUG', 'True').lower() == 'true'
+    'DEBUG': os.getenv('DEBUG', 'True').lower() == 'true',
+    'RECYCLE_BIN': '回收站',  # 回收站文件夹名称
+    'RECYCLE_DAYS': 30  # 回收站保留天数
 }
 
 app.config['MAX_CONTENT_LENGTH'] = CONFIG['MAX_UPLOAD_SIZE']
@@ -134,6 +137,124 @@ def safe_filename(filename):
 
 
 app.jinja_env.filters['format_size'] = format_size
+
+
+# ============ 回收站相关函数 ============
+
+def get_recycle_bin_path():
+    """获取回收站路径"""
+    return Path(CONFIG['SHARED_DIRECTORY']) / CONFIG['RECYCLE_BIN']
+
+
+def get_metadata_file():
+    """获取元数据文件路径"""
+    return get_recycle_bin_path() / '.metadata.json'
+
+
+def load_metadata():
+    """加载回收站元数据"""
+    metadata_file = get_metadata_file()
+    if metadata_file.exists():
+        try:
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def save_metadata(metadata):
+    """保存回收站元数据"""
+    metadata_file = get_metadata_file()
+    try:
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"保存元数据失败: {e}")
+
+
+def add_to_recycle_bin(item_path, original_path):
+    """将文件/目录添加到回收站元数据"""
+    import uuid
+    import shutil
+
+    recycle_bin = get_recycle_bin_path()
+
+    # 确保回收站存在
+    if not recycle_bin.exists():
+        recycle_bin.mkdir(parents=True)
+
+    # 生成唯一ID作为回收站中的文件名
+    unique_id = str(uuid.uuid4())
+    ext = item_path.suffix if item_path.is_file() else ''
+    new_name = f"{unique_id}{ext}"
+
+    # 移动到回收站
+    dest_path = recycle_bin / new_name
+    shutil.move(str(item_path), str(dest_path))
+
+    # 更新元数据
+    metadata = load_metadata()
+    metadata[unique_id] = {
+        'original_name': item_path.name,
+        'original_path': str(original_path),
+        'deleted_time': datetime.now().isoformat(),
+        'is_dir': dest_path.is_dir(),
+        'size': get_dir_size(dest_path) if dest_path.is_dir() else dest_path.stat().st_size
+    }
+    save_metadata(metadata)
+
+    return unique_id
+
+
+def get_dir_size(path):
+    """递归计算目录大小"""
+    total = 0
+    try:
+        for item in path.rglob('*'):
+            if item.is_file():
+                total += item.stat().st_size
+    except Exception:
+        pass
+    return total
+
+
+def clean_old_items():
+    """清理超过指定天数的回收站项目"""
+    metadata = load_metadata()
+    recycle_bin = get_recycle_bin_path()
+    current_time = datetime.now()
+
+    items_to_remove = []
+
+    for item_id, info in metadata.items():
+        deleted_time = datetime.fromisoformat(info['deleted_time'])
+        days_diff = (current_time - deleted_time).days
+
+        if days_diff >= CONFIG['RECYCLE_DAYS']:
+            # 永久删除
+            ext = Path(info['original_name']).suffix if not info['is_dir'] else ''
+            item_path = recycle_bin / f"{item_id}{ext}"
+
+            if item_path.exists():
+                try:
+                    if item_path.is_file():
+                        item_path.unlink()
+                    else:
+                        import shutil
+                        shutil.rmtree(item_path)
+                    items_to_remove.append(item_id)
+                except Exception as e:
+                    print(f"删除 {item_id} 失败: {e}")
+
+    # 更新元数据
+    for item_id in items_to_remove:
+        del metadata[item_id]
+
+    if items_to_remove:
+        save_metadata(metadata)
+
+    return len(items_to_remove)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -342,7 +463,7 @@ def upload():
 @app.route('/delete', methods=['POST'])
 @login_required
 def delete():
-    """删除文件或目录"""
+    """删除文件或目录（移动到回收站）"""
     filepath = request.form.get('path')
     if not filepath:
         return jsonify({'success': False, 'message': '未指定路径'}), 400
@@ -352,15 +473,19 @@ def delete():
     if not target_path.exists():
         return jsonify({'success': False, 'message': '文件或目录不存在'}), 404
 
+    # 检查是否是回收站本身
+    recycle_bin = get_recycle_bin_path()
     try:
-        if target_path.is_file():
-            target_path.unlink()
-            message = f'文件 {target_path.name} 已删除'
-        else:
-            # 删除目录及其内容
-            import shutil
-            shutil.rmtree(target_path)
-            message = f'目录 {target_path.name} 已删除'
+        if target_path.resolve() == recycle_bin.resolve():
+            return jsonify({'success': False, 'message': '不能删除回收站'}), 400
+    except Exception:
+        pass
+
+    try:
+        # 移动到回收站
+        add_to_recycle_bin(target_path, filepath)
+        item_type = '目录' if not target_path.exists() or target_path.is_dir() else '文件'
+        message = f'{item_type} {target_path.name} 已移至回收站'
 
         return jsonify({'success': True, 'message': message})
     except Exception as e:
@@ -564,6 +689,159 @@ def move():
         return jsonify({'success': True, 'message': f'{item_type} {source.name} 已移动'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'移动失败: {str(e)}'}), 500
+
+
+@app.route('/recycle-bin')
+@login_required
+def recycle_bin():
+    """回收站页面"""
+    # 清理过期项目
+    clean_old_items()
+
+    # 加载元数据
+    metadata = load_metadata()
+    recycle_bin_path = get_recycle_bin_path()
+
+    # 准备显示数据
+    items = []
+    for item_id, info in metadata.items():
+        ext = Path(info['original_name']).suffix if not info['is_dir'] else ''
+        item_path = recycle_bin_path / f"{item_id}{ext}"
+
+        if item_path.exists():
+            deleted_time = datetime.fromisoformat(info['deleted_time'])
+            days_left = CONFIG['RECYCLE_DAYS'] - (datetime.now() - deleted_time).days
+
+            items.append({
+                'id': item_id,
+                'name': info['original_name'],
+                'original_path': info['original_path'],
+                'is_dir': info['is_dir'],
+                'size': info['size'],
+                'deleted_time': deleted_time.strftime('%Y-%m-%d %H:%M:%S'),
+                'days_left': max(0, days_left),
+                'file_type': get_file_type(info['original_name']) if not info['is_dir'] else None
+            })
+
+    # 按删除时间排序（最新的在前面）
+    items.sort(key=lambda x: x['deleted_time'], reverse=True)
+
+    return render_template('recycle_bin.html', items=items)
+
+
+@app.route('/restore', methods=['POST'])
+@login_required
+def restore():
+    """恢复文件或目录"""
+    item_id = request.form.get('item_id')
+    if not item_id:
+        return jsonify({'success': False, 'message': '未指定项目ID'}), 400
+
+    metadata = load_metadata()
+    if item_id not in metadata:
+        return jsonify({'success': False, 'message': '项目不存在'}), 404
+
+    info = metadata[item_id]
+    recycle_bin_path = get_recycle_bin_path()
+
+    # 获取回收站中的文件
+    ext = Path(info['original_name']).suffix if not info['is_dir'] else ''
+    item_path = recycle_bin_path / f"{item_id}{ext}"
+
+    if not item_path.exists():
+        return jsonify({'success': False, 'message': '文件不存在'}), 404
+
+    try:
+        # 恢复到原路径
+        original_path = get_safe_path(info['original_path'])
+
+        # 检查原路径是否已存在同名文件
+        if original_path.exists():
+            return jsonify({'success': False, 'message': f'原位置已存在同名{("目录" if info["is_dir"] else "文件")}'}), 400
+
+        # 确保父目录存在
+        original_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 移动回原位置
+        import shutil
+        shutil.move(str(item_path), str(original_path))
+
+        # 从元数据中移除
+        del metadata[item_id]
+        save_metadata(metadata)
+
+        return jsonify({'success': True, 'message': f'{info["original_name"]} 已恢复'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'恢复失败: {str(e)}'}), 500
+
+
+@app.route('/permanent-delete', methods=['POST'])
+@login_required
+def permanent_delete():
+    """永久删除文件或目录"""
+    item_id = request.form.get('item_id')
+    if not item_id:
+        return jsonify({'success': False, 'message': '未指定项目ID'}), 400
+
+    metadata = load_metadata()
+    if item_id not in metadata:
+        return jsonify({'success': False, 'message': '项目不存在'}), 404
+
+    info = metadata[item_id]
+    recycle_bin_path = get_recycle_bin_path()
+
+    # 获取回收站中的文件
+    ext = Path(info['original_name']).suffix if not info['is_dir'] else ''
+    item_path = recycle_bin_path / f"{item_id}{ext}"
+
+    try:
+        if item_path.exists():
+            if item_path.is_file():
+                item_path.unlink()
+            else:
+                import shutil
+                shutil.rmtree(item_path)
+
+        # 从元数据中移除
+        del metadata[item_id]
+        save_metadata(metadata)
+
+        return jsonify({'success': True, 'message': f'{info["original_name"]} 已永久删除'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'删除失败: {str(e)}'}), 500
+
+
+@app.route('/empty-recycle-bin', methods=['POST'])
+@login_required
+def empty_recycle_bin():
+    """清空回收站"""
+    metadata = load_metadata()
+    recycle_bin_path = get_recycle_bin_path()
+
+    deleted_count = 0
+
+    try:
+        for item_id, info in list(metadata.items()):
+            ext = Path(info['original_name']).suffix if not info['is_dir'] else ''
+            item_path = recycle_bin_path / f"{item_id}{ext}"
+
+            if item_path.exists():
+                try:
+                    if item_path.is_file():
+                        item_path.unlink()
+                    else:
+                        import shutil
+                        shutil.rmtree(item_path)
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"删除 {item_id} 失败: {e}")
+
+        # 清空元数据
+        save_metadata({})
+
+        return jsonify({'success': True, 'message': f'已清空回收站，共删除 {deleted_count} 个项目'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'清空失败: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
