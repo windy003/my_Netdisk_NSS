@@ -710,6 +710,7 @@
             <button onclick="previousTrack()" title="上一首">⏮</button>
             <button id="playPauseBtn" onclick="togglePlayPause()" title="播放/暂停">▶️</button>
             <button onclick="nextTrack()" title="下一首">⏭</button>
+            <button id="playModeBtn" onclick="togglePlayMode()" title="顺序播放">🔁</button>
         </div>
         <button class="mini-player-close" onclick="closeMiniPlayer()" title="关闭">✕</button>
         <audio id="audioPlayer"></audio>
@@ -798,9 +799,11 @@
         const currentTimeSpan = document.getElementById('currentTime');
         const durationSpan = document.getElementById('duration');
         const playerTitle = document.getElementById('playerTitle');
+        const playModeBtn = document.getElementById('playModeBtn');
 
         let playlist = [];
         let currentTrackIndex = -1;
+        let playMode = 'sequence'; // sequence: 顺序播放, loop: 单曲循环, random: 随机播放
 
         // 保存播放器状态到 localStorage
         function savePlayerState() {
@@ -810,7 +813,8 @@
                     title: playerTitle.textContent,
                     currentTime: audioPlayer.currentTime,
                     isPlaying: !audioPlayer.paused,
-                    isActive: miniPlayer.classList.contains('active')
+                    isActive: miniPlayer.classList.contains('active'),
+                    playMode: playMode
                 };
                 localStorage.setItem('audioPlayerState', JSON.stringify(playerState));
             }
@@ -827,6 +831,12 @@
                         playerTitle.textContent = playerState.title;
                         miniPlayer.classList.add('active');
                         document.body.classList.add('player-active');
+
+                        // 恢复播放模式
+                        if (playerState.playMode) {
+                            playMode = playerState.playMode;
+                            updatePlayModeButton();
+                        }
 
                         // 等待音频加载后设置播放位置
                         audioPlayer.addEventListener('loadedmetadata', function setTime() {
@@ -851,6 +861,9 @@
 
         // 播放音频
         function playAudio(audioUrl, title) {
+            // 构建当前目录的播放列表
+            buildPlaylist(audioUrl);
+
             audioPlayer.src = audioUrl;
             playerTitle.textContent = title;
             audioPlayer.play();
@@ -858,6 +871,30 @@
             document.body.classList.add('player-active');
             playPauseBtn.textContent = '⏸';
             savePlayerState();
+        }
+
+        // 构建播放列表
+        function buildPlaylist(currentAudioUrl) {
+            playlist = [];
+            currentTrackIndex = -1;
+
+            // 从页面中提取所有音频文件链接
+            const audioLinks = document.querySelectorAll('a[onclick*="playAudio"]');
+            audioLinks.forEach((link, index) => {
+                // 提取 onclick 中的参数
+                const onclickAttr = link.getAttribute('onclick');
+                const urlMatch = onclickAttr.match(/playAudio\('([^']+)',\s*'([^']+)'\)/);
+                if (urlMatch) {
+                    const url = urlMatch[1];
+                    const name = urlMatch[2];
+                    playlist.push({ url, name });
+
+                    // 找到当前播放的音频在列表中的索引
+                    if (url === currentAudioUrl) {
+                        currentTrackIndex = index;
+                    }
+                }
+            });
         }
 
         // 播放/暂停切换
@@ -884,7 +921,9 @@
 
         // 上一首
         function previousTrack() {
-            if (currentTrackIndex > 0) {
+            if (playMode === 'random' && playlist.length > 0) {
+                playRandomTrack();
+            } else if (currentTrackIndex > 0) {
                 currentTrackIndex--;
                 const track = playlist[currentTrackIndex];
                 playAudio(track.url, track.name);
@@ -893,11 +932,54 @@
 
         // 下一首
         function nextTrack() {
-            if (currentTrackIndex < playlist.length - 1) {
+            if (playMode === 'random' && playlist.length > 0) {
+                playRandomTrack();
+            } else if (currentTrackIndex < playlist.length - 1) {
                 currentTrackIndex++;
                 const track = playlist[currentTrackIndex];
                 playAudio(track.url, track.name);
             }
+        }
+
+        // 更新播放模式按钮显示
+        function updatePlayModeButton() {
+            if (playMode === 'sequence') {
+                playModeBtn.textContent = '🔁';
+                playModeBtn.title = '顺序播放';
+            } else if (playMode === 'loop') {
+                playModeBtn.textContent = '🔂';
+                playModeBtn.title = '单曲循环';
+            } else if (playMode === 'random') {
+                playModeBtn.textContent = '🔀';
+                playModeBtn.title = '随机播放';
+            }
+        }
+
+        // 切换播放模式
+        function togglePlayMode() {
+            if (playMode === 'sequence') {
+                playMode = 'loop';
+            } else if (playMode === 'loop') {
+                playMode = 'random';
+            } else {
+                playMode = 'sequence';
+            }
+            updatePlayModeButton();
+            savePlayerState();
+        }
+
+        // 随机播放
+        function playRandomTrack() {
+            if (playlist.length <= 1) return;
+
+            let randomIndex;
+            do {
+                randomIndex = Math.floor(Math.random() * playlist.length);
+            } while (randomIndex === currentTrackIndex && playlist.length > 1);
+
+            currentTrackIndex = randomIndex;
+            const track = playlist[currentTrackIndex];
+            playAudio(track.url, track.name);
         }
 
         // 定期保存播放进度
@@ -943,7 +1025,17 @@
 
         // 自动播放下一首
         audioPlayer.addEventListener('ended', () => {
-            nextTrack();
+            if (playMode === 'loop') {
+                // 单曲循环：重新播放当前曲目
+                audioPlayer.currentTime = 0;
+                audioPlayer.play();
+            } else if (playMode === 'random') {
+                // 随机播放：播放随机曲目
+                playRandomTrack();
+            } else {
+                // 顺序播放：播放下一曲
+                nextTrack();
+            }
         });
 
         // 播放状态变化
@@ -1117,6 +1209,29 @@
             }
         }
 
+        // 保存当前访问的路径
+        function saveCurrentPath() {
+            if (currentPath) {
+                localStorage.setItem('lastVisitedPath', currentPath);
+            } else {
+                // 如果在根目录，保存空字符串
+                localStorage.setItem('lastVisitedPath', '');
+            }
+        }
+
+        // 恢复上次访问的路径
+        function restoreLastPath() {
+            const lastPath = localStorage.getItem('lastVisitedPath');
+
+            // 只有在当前是根目录（首次访问或直接访问根路径）时才自动跳转
+            // 并且 lastPath 存在且不为空
+            if (currentPath === '' && lastPath && lastPath !== '') {
+                window.location.href = `/browse/${lastPath}`;
+                return true;
+            }
+            return false;
+        }
+
         // 页面加载时恢复用户的视图偏好和播放器状态
         document.addEventListener('DOMContentLoaded', () => {
             const savedView = localStorage.getItem('fileViewMode') || 'list';
@@ -1124,6 +1239,14 @@
 
             // 恢复音频播放器状态
             restorePlayerState();
+
+            // 尝试恢复上次访问的路径（如果当前在根目录）
+            const redirected = restoreLastPath();
+
+            // 如果没有发生重定向，保存当前路径
+            if (!redirected) {
+                saveCurrentPath();
+            }
         });
 
         function toggleActions(button) {
