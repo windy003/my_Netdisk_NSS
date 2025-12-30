@@ -1331,8 +1331,16 @@
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            const file = document.getElementById('fileInput').files[0];
+            console.log('=== 开始上传文件 ===');
+            console.log('文件名:', file.name);
+            console.log('文件大小:', (file.size / 1024 / 1024).toFixed(2), 'MB');
+            console.log('开始时间:', new Date().toLocaleTimeString());
+
+            const uploadStartTime = performance.now();
+
             const formData = new FormData();
-            formData.append('file', document.getElementById('fileInput').files[0]);
+            formData.append('file', file);
             formData.append('path', currentPath);
 
             try {
@@ -1341,16 +1349,40 @@
                     body: formData
                 });
 
+                const uploadEndTime = performance.now();
+                const uploadDuration = ((uploadEndTime - uploadStartTime) / 1000).toFixed(2);
+
+                console.log('上传完成时间:', new Date().toLocaleTimeString());
+                console.log('总耗时:', uploadDuration, '秒');
+
                 const result = await response.json();
 
                 if (result.success) {
-                    showAlert(result.message, 'success');
+                    // 显示诊断信息
+                    if (result.diagnostics) {
+                        const diag = result.diagnostics;
+                        console.log('=== 服务器性能诊断 ===');
+                        console.log('文件大小:', diag.fileSize);
+                        console.log('服务器接收耗时:', diag.receiveTime);
+                        console.log('磁盘写入耗时:', diag.writeTime);
+                        console.log('服务器总耗时:', diag.totalTime);
+                        console.log('写入速度:', diag.writeSpeed);
+                        console.log('客户端总耗时:', uploadDuration, '秒');
+                        console.log('====================');
+
+                        showAlert(`${result.message}\n查看浏览器控制台(F12)获取详细性能数据`, 'success');
+                    } else {
+                        console.log('上传成功:', result.message);
+                        showAlert(result.message, 'success');
+                    }
                     closeUploadModal();
                     setTimeout(() => location.reload(), 1000);
                 } else {
+                    console.error('上传失败:', result.message);
                     showAlert(result.message, 'error');
                 }
             } catch (error) {
+                console.error('上传错误:', error);
                 showAlert('上传失败: ' + error.message, 'error');
             }
         });

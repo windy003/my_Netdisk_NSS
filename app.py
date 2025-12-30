@@ -428,7 +428,12 @@ def stream(filepath):
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload():
-    """上传文件"""
+    """上传文件（兼容旧版，保留用于小文件）"""
+    import time
+
+    start_time = time.time()
+    receive_start = time.time()
+
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': '没有文件'}), 400
 
@@ -454,8 +459,141 @@ def upload():
         return jsonify({'success': False, 'message': '文件已存在'}), 400
 
     try:
-        file.save(save_path)
-        return jsonify({'success': True, 'message': f'文件 {filename} 上传成功'})
+        # 使用流式保存，提高大文件上传性能
+        # 使用更大的缓冲区（4MB）来加快写入速度
+        CHUNK_SIZE = 4 * 1024 * 1024  # 4MB chunks，减少系统调用次数
+
+        write_start = time.time()
+        receive_time = write_start - receive_start
+
+        bytes_written = 0
+        with open(save_path, 'wb', buffering=CHUNK_SIZE) as f:
+            while True:
+                chunk = file.stream.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                f.write(chunk)
+                bytes_written += len(chunk)
+
+        write_time = time.time() - write_start
+        total_time = time.time() - start_time
+
+        file_size_mb = bytes_written / 1024 / 1024
+
+        # 打印诊断信息（使用flush=True确保立即输出）
+        print(f"\n=== 上传性能诊断 ===", flush=True)
+        print(f"文件: {filename}", flush=True)
+        print(f"大小: {file_size_mb:.2f} MB", flush=True)
+        print(f"接收耗时: {receive_time:.2f} 秒", flush=True)
+        print(f"写入耗时: {write_time:.2f} 秒", flush=True)
+        print(f"总耗时: {total_time:.2f} 秒", flush=True)
+        print(f"写入速度: {file_size_mb / write_time if write_time > 0 else 0:.2f} MB/s", flush=True)
+        print(f"==================\n", flush=True)
+
+        return jsonify({
+            'success': True,
+            'message': f'文件 {filename} 上传成功',
+            'diagnostics': {
+                'fileSize': f'{file_size_mb:.2f} MB',
+                'receiveTime': f'{receive_time:.2f}秒',
+                'writeTime': f'{write_time:.2f}秒',
+                'totalTime': f'{total_time:.2f}秒',
+                'writeSpeed': f'{file_size_mb / write_time if write_time > 0 else 0:.2f} MB/s'
+            }
+        })
+    except Exception as e:
+        # 如果保存失败，删除部分写入的文件
+        if save_path.exists():
+            try:
+                save_path.unlink()
+            except:
+                pass
+        return jsonify({'success': False, 'message': f'上传失败: {str(e)}'}), 500
+
+
+@app.route('/upload-chunk', methods=['POST'])
+@login_required
+def upload_chunk():
+    """分块上传接口"""
+    import time
+    try:
+        # 获取分块信息
+        chunk = request.files.get('chunk')
+        chunk_index = int(request.form.get('chunkIndex'))
+        total_chunks = int(request.form.get('totalChunks'))
+        filename = request.form.get('filename')
+        file_identifier = request.form.get('fileIdentifier')  # 唯一标识符
+        target_path = request.form.get('path', '')
+
+        print(f"[上传] 接收分块 {chunk_index + 1}/{total_chunks} - {filename}", flush=True)
+
+        if not all([chunk, filename, file_identifier is not None]):
+            return jsonify({'success': False, 'message': '参数不完整'}), 400
+
+        # 安全的文件名
+        filename = safe_filename(filename)
+
+        # 创建临时目录存储分块
+        temp_dir = Path(CONFIG['SHARED_DIRECTORY']) / '.upload_temp' / file_identifier
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        # 保存当前分块
+        chunk_path = temp_dir / f'chunk_{chunk_index}'
+        chunk.save(chunk_path)
+
+        # 检查是否所有分块都已上传
+        uploaded_chunks = len(list(temp_dir.glob('chunk_*')))
+
+        if uploaded_chunks == total_chunks:
+            # 所有分块上传完成，开始合并
+            print(f"[上传] 开始合并文件: {filename}", flush=True)
+            merge_start = time.time()
+
+            target_dir = get_safe_path(target_path)
+            if not target_dir.exists() or not target_dir.is_dir():
+                return jsonify({'success': False, 'message': '目标目录不存在'}), 400
+
+            final_path = target_dir / filename
+
+            # 检查文件是否已存在
+            if final_path.exists():
+                # 清理临时文件
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                return jsonify({'success': False, 'message': '文件已存在'}), 400
+
+            # 合并分块
+            with open(final_path, 'wb') as outfile:
+                for i in range(total_chunks):
+                    chunk_file = temp_dir / f'chunk_{i}'
+                    if chunk_file.exists():
+                        with open(chunk_file, 'rb') as infile:
+                            outfile.write(infile.read())
+
+            merge_time = time.time() - merge_start
+            file_size_mb = final_path.stat().st_size / 1024 / 1024
+
+            print(f"[上传] 文件合并完成: {filename}", flush=True)
+            print(f"[上传] 文件大小: {file_size_mb:.2f} MB", flush=True)
+            print(f"[上传] 合并耗时: {merge_time:.2f} 秒", flush=True)
+
+            # 清理临时文件
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+            return jsonify({
+                'success': True,
+                'message': f'文件 {filename} 上传成功',
+                'completed': True
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': f'分块 {chunk_index + 1}/{total_chunks} 上传成功',
+                'completed': False,
+                'uploadedChunks': uploaded_chunks
+            })
+
     except Exception as e:
         return jsonify({'success': False, 'message': f'上传失败: {str(e)}'}), 500
 
