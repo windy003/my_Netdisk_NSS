@@ -589,6 +589,190 @@
         body.player-active {
             padding-bottom: 100px;
         }
+
+        /* 全屏播放器样式 */
+        .fullscreen-player {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .fullscreen-player.active {
+            display: flex;
+        }
+
+        .fullscreen-player-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .fullscreen-player-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+        }
+
+        .fullscreen-player-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .fullscreen-player-artwork {
+            width: 280px;
+            height: 280px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 120px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            margin-bottom: 40px;
+        }
+
+        .fullscreen-player-title {
+            font-size: 24px;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 10px;
+            max-width: 90%;
+            word-break: break-word;
+        }
+
+        .fullscreen-player-artist {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 40px;
+        }
+
+        .fullscreen-progress-container {
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 30px;
+        }
+
+        .fullscreen-progress-bar {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .fullscreen-progress-bar::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .fullscreen-progress-bar::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .fullscreen-time {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 10px;
+        }
+
+        .fullscreen-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .fullscreen-controls button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+            padding: 10px;
+        }
+
+        .fullscreen-controls button:hover {
+            transform: scale(1.1);
+        }
+
+        .fullscreen-controls button:active {
+            transform: scale(0.95);
+        }
+
+        .fullscreen-btn-secondary {
+            font-size: 28px;
+            opacity: 0.8;
+        }
+
+        .fullscreen-btn-primary {
+            width: 70px;
+            height: 70px;
+            background: white !important;
+            color: #1a1a2e !important;
+            border-radius: 50%;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .fullscreen-btn-mode {
+            font-size: 24px;
+            opacity: 0.7;
+        }
+
+        .fullscreen-btn-mode:hover {
+            opacity: 1;
+        }
+
+        /* 迷你播放器点击区域 */
+        .mini-player-clickable {
+            flex: 1;
+            min-width: 0;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -698,22 +882,52 @@
 
     <!-- 底部音频播放器 -->
     <div id="miniPlayer" class="mini-player">
-        <div class="mini-player-info">
-            <div class="mini-player-title" id="playerTitle">未播放</div>
-            <div class="mini-player-progress">
-                <span id="currentTime">0:00</span>
-                <input type="range" id="progressBar" min="0" max="100" value="0">
-                <span id="duration">0:00</span>
+        <div class="mini-player-clickable" onclick="openFullscreenPlayer()">
+            <div class="mini-player-info">
+                <div class="mini-player-title" id="playerTitle">未播放</div>
+                <div class="mini-player-progress">
+                    <span id="currentTime">0:00</span>
+                    <input type="range" id="progressBar" min="0" max="100" value="0" onclick="event.stopPropagation()">
+                    <span id="duration">0:00</span>
+                </div>
             </div>
         </div>
         <div class="mini-player-controls">
-            <button onclick="previousTrack()" title="上一首">⏮</button>
-            <button id="playPauseBtn" onclick="togglePlayPause()" title="播放/暂停">▶️</button>
-            <button onclick="nextTrack()" title="下一首">⏭</button>
-            <button id="playModeBtn" onclick="togglePlayMode()" title="顺序播放">🔁</button>
+            <button onclick="togglePlayPause(); event.stopPropagation();" id="playPauseBtn" title="播放/暂停">▶️</button>
         </div>
-        <button class="mini-player-close" onclick="closeMiniPlayer()" title="关闭">✕</button>
+        <button class="mini-player-close" onclick="closeMiniPlayer(); event.stopPropagation();" title="关闭">✕</button>
         <audio id="audioPlayer"></audio>
+    </div>
+
+    <!-- 全屏音频播放器 -->
+    <div id="fullscreenPlayer" class="fullscreen-player">
+        <div class="fullscreen-player-header">
+            <div></div>
+            <button class="fullscreen-player-close" onclick="closeFullscreenPlayer()" title="收起">▼</button>
+        </div>
+
+        <div class="fullscreen-player-artwork">
+            🎵
+        </div>
+
+        <div class="fullscreen-player-title" id="fullscreenTitle">未播放</div>
+        <div class="fullscreen-player-artist">正在播放</div>
+
+        <div class="fullscreen-progress-container">
+            <input type="range" class="fullscreen-progress-bar" id="fullscreenProgressBar" min="0" max="100" value="0">
+            <div class="fullscreen-time">
+                <span id="fullscreenCurrentTime">0:00</span>
+                <span id="fullscreenDuration">0:00</span>
+            </div>
+        </div>
+
+        <div class="fullscreen-controls">
+            <button class="fullscreen-btn-mode" id="fullscreenPlayModeBtn" onclick="togglePlayMode()" title="播放模式">🔁</button>
+            <button class="fullscreen-btn-secondary" onclick="previousTrack()" title="上一首">⏮</button>
+            <button class="fullscreen-btn-primary" id="fullscreenPlayPauseBtn" onclick="togglePlayPause()" title="播放/暂停">▶️</button>
+            <button class="fullscreen-btn-secondary" onclick="nextTrack()" title="下一首">⏭</button>
+            <button class="fullscreen-btn-mode" style="opacity: 0; cursor: default;">🔁</button>
+        </div>
     </div>
 
     <!-- 上传模态框 -->
@@ -792,6 +1006,10 @@
         const currentPath = "{{ current_path }}";
 
         // ============ 音频播放器管理 ============
+        // 检测是否在 Android App 中运行
+        const isAndroidApp = typeof Android !== 'undefined';
+        console.log('运行环境:', isAndroidApp ? 'Android App' : 'Web浏览器');
+
         const audioPlayer = document.getElementById('audioPlayer');
         const miniPlayer = document.getElementById('miniPlayer');
         const playPauseBtn = document.getElementById('playPauseBtn');
@@ -799,11 +1017,22 @@
         const currentTimeSpan = document.getElementById('currentTime');
         const durationSpan = document.getElementById('duration');
         const playerTitle = document.getElementById('playerTitle');
-        const playModeBtn = document.getElementById('playModeBtn');
+
+        // 全屏播放器元素
+        const fullscreenPlayer = document.getElementById('fullscreenPlayer');
+        const fullscreenTitle = document.getElementById('fullscreenTitle');
+        const fullscreenProgressBar = document.getElementById('fullscreenProgressBar');
+        const fullscreenCurrentTime = document.getElementById('fullscreenCurrentTime');
+        const fullscreenDuration = document.getElementById('fullscreenDuration');
+        const fullscreenPlayPauseBtn = document.getElementById('fullscreenPlayPauseBtn');
+        const fullscreenPlayModeBtn = document.getElementById('fullscreenPlayModeBtn');
 
         let playlist = [];
         let currentTrackIndex = -1;
         let playMode = 'sequence'; // sequence: 顺序播放, loop: 单曲循环, random: 随机播放
+        let isNativePlaying = false; // 是否正在使用原生播放器播放
+        let nativeDuration = 0; // Android 原生播放器的总时长（毫秒）
+        let nativePosition = 0; // Android 原生播放器的当前位置（毫秒）
 
         // 保存播放器状态到 localStorage
         function savePlayerState() {
@@ -828,7 +1057,7 @@
                     const playerState = JSON.parse(savedState);
                     if (playerState.isActive && playerState.src) {
                         audioPlayer.src = playerState.src;
-                        playerTitle.textContent = playerState.title;
+                        updateBothTitles(playerState.title);
                         miniPlayer.classList.add('active');
                         document.body.classList.add('player-active');
 
@@ -846,7 +1075,7 @@
                             if (playerState.isPlaying) {
                                 audioPlayer.play().catch(err => {
                                     console.log('自动播放被阻止:', err);
-                                    playPauseBtn.textContent = '▶️';
+                                    updateBothPlayPauseButtons(false);
                                 });
                             }
                             audioPlayer.removeEventListener('loadedmetadata', setTime);
@@ -864,12 +1093,40 @@
             // 构建当前目录的播放列表
             buildPlaylist(audioUrl);
 
+            if (isAndroidApp) {
+                // 使用 Android 原生播放器
+                try {
+                    const playlistJson = JSON.stringify(playlist);
+                    Android.playAudio(audioUrl, title, playlistJson);
+
+                    // 更新 UI 状态
+                    isNativePlaying = true;
+                    updateBothTitles(title);
+                    miniPlayer.classList.add('active');
+                    document.body.classList.add('player-active');
+                    updateBothPlayPauseButtons(true);
+
+                    console.log('使用 Android 原生播放器:', title);
+                } catch (error) {
+                    console.error('调用 Android 播放器失败:', error);
+                    // 回退到 Web 播放器
+                    playAudioWeb(audioUrl, title);
+                }
+            } else {
+                // 使用 Web 播放器
+                playAudioWeb(audioUrl, title);
+            }
+        }
+
+        // Web 播放器实现
+        function playAudioWeb(audioUrl, title) {
             audioPlayer.src = audioUrl;
-            playerTitle.textContent = title;
+            updateBothTitles(title);
             audioPlayer.play();
             miniPlayer.classList.add('active');
             document.body.classList.add('player-active');
-            playPauseBtn.textContent = '⏸';
+            updateBothPlayPauseButtons(true);
+            isNativePlaying = false;
             savePlayerState();
         }
 
@@ -887,7 +1144,8 @@
                 if (urlMatch) {
                     const url = urlMatch[1];
                     const name = urlMatch[2];
-                    playlist.push({ url, name });
+                    // 使用 title 字段以匹配 Android 的 AudioTrack 类
+                    playlist.push({ url: url, title: name });
 
                     // 找到当前播放的音频在列表中的索引
                     if (url === currentAudioUrl) {
@@ -899,60 +1157,101 @@
 
         // 播放/暂停切换
         function togglePlayPause() {
-            if (audioPlayer.paused) {
-                audioPlayer.play();
-                playPauseBtn.textContent = '⏸';
+            if (isAndroidApp && isNativePlaying) {
+                // 使用 Android 原生播放器控制
+                try {
+                    if (playPauseBtn.textContent === '▶️') {
+                        Android.resumeAudio();
+                        updateBothPlayPauseButtons(true);
+                    } else {
+                        Android.pauseAudio();
+                        updateBothPlayPauseButtons(false);
+                    }
+                } catch (error) {
+                    console.error('调用 Android 播放控制失败:', error);
+                }
             } else {
-                audioPlayer.pause();
-                playPauseBtn.textContent = '▶️';
+                // 使用 Web 播放器
+                if (audioPlayer.paused) {
+                    audioPlayer.play();
+                    updateBothPlayPauseButtons(true);
+                } else {
+                    audioPlayer.pause();
+                    updateBothPlayPauseButtons(false);
+                }
+                savePlayerState();
             }
-            savePlayerState();
         }
 
         // 关闭播放器
         function closeMiniPlayer() {
-            audioPlayer.pause();
-            audioPlayer.src = '';
+            if (isAndroidApp && isNativePlaying) {
+                // 停止 Android 原生播放器
+                try {
+                    Android.stopAudio();
+                    isNativePlaying = false;
+                } catch (error) {
+                    console.error('停止 Android 播放器失败:', error);
+                }
+            } else {
+                // 停止 Web 播放器
+                audioPlayer.pause();
+                audioPlayer.src = '';
+                localStorage.removeItem('audioPlayerState');
+            }
+
             miniPlayer.classList.remove('active');
+            fullscreenPlayer.classList.remove('active');
             document.body.classList.remove('player-active');
-            playPauseBtn.textContent = '▶️';
-            localStorage.removeItem('audioPlayerState');
+            document.body.style.overflow = '';
+            updateBothPlayPauseButtons(false);
         }
 
         // 上一首
         function previousTrack() {
-            if (playMode === 'random' && playlist.length > 0) {
-                playRandomTrack();
-            } else if (currentTrackIndex > 0) {
-                currentTrackIndex--;
-                const track = playlist[currentTrackIndex];
-                playAudio(track.url, track.name);
+            if (isAndroidApp && isNativePlaying) {
+                // 使用 Android 原生播放器控制
+                try {
+                    Android.previousTrack();
+                } catch (error) {
+                    console.error('调用 Android 上一首失败:', error);
+                }
+            } else {
+                // 使用 Web 播放器
+                if (playMode === 'random' && playlist.length > 0) {
+                    playRandomTrack();
+                } else if (currentTrackIndex > 0) {
+                    currentTrackIndex--;
+                    const track = playlist[currentTrackIndex];
+                    playAudio(track.url, track.title);
+                }
             }
         }
 
         // 下一首
         function nextTrack() {
-            if (playMode === 'random' && playlist.length > 0) {
-                playRandomTrack();
-            } else if (currentTrackIndex < playlist.length - 1) {
-                currentTrackIndex++;
-                const track = playlist[currentTrackIndex];
-                playAudio(track.url, track.name);
+            if (isAndroidApp && isNativePlaying) {
+                // 使用 Android 原生播放器控制
+                try {
+                    Android.nextTrack();
+                } catch (error) {
+                    console.error('调用 Android 下一首失败:', error);
+                }
+            } else {
+                // 使用 Web 播放器
+                if (playMode === 'random' && playlist.length > 0) {
+                    playRandomTrack();
+                } else if (currentTrackIndex < playlist.length - 1) {
+                    currentTrackIndex++;
+                    const track = playlist[currentTrackIndex];
+                    playAudio(track.url, track.title);
+                }
             }
         }
 
-        // 更新播放模式按钮显示
+        // 更新播放模式按钮显示（迷你播放器已移除模式按钮，只更新全屏播放器）
         function updatePlayModeButton() {
-            if (playMode === 'sequence') {
-                playModeBtn.textContent = '🔁';
-                playModeBtn.title = '顺序播放';
-            } else if (playMode === 'loop') {
-                playModeBtn.textContent = '🔂';
-                playModeBtn.title = '单曲循环';
-            } else if (playMode === 'random') {
-                playModeBtn.textContent = '🔀';
-                playModeBtn.title = '随机播放';
-            }
+            updateFullscreenPlayModeButton();
         }
 
         // 切换播放模式
@@ -979,7 +1278,68 @@
 
             currentTrackIndex = randomIndex;
             const track = playlist[currentTrackIndex];
-            playAudio(track.url, track.name);
+            playAudio(track.url, track.title);
+        }
+
+        // ============ 全屏播放器控制 ============
+        // 打开全屏播放器
+        function openFullscreenPlayer() {
+            fullscreenPlayer.classList.add('active');
+            syncFullscreenPlayer();
+            document.body.style.overflow = 'hidden'; // 禁止背景滚动
+        }
+
+        // 关闭全屏播放器
+        function closeFullscreenPlayer() {
+            fullscreenPlayer.classList.remove('active');
+            document.body.style.overflow = ''; // 恢复滚动
+        }
+
+        // 同步全屏播放器状态
+        function syncFullscreenPlayer() {
+            fullscreenTitle.textContent = playerTitle.textContent;
+            fullscreenProgressBar.value = progressBar.value;
+            fullscreenCurrentTime.textContent = currentTimeSpan.textContent;
+            fullscreenDuration.textContent = durationSpan.textContent;
+            fullscreenPlayPauseBtn.textContent = playPauseBtn.textContent;
+            updateFullscreenPlayModeButton();
+        }
+
+        // 更新全屏播放器的播放模式按钮
+        function updateFullscreenPlayModeButton() {
+            if (playMode === 'sequence') {
+                fullscreenPlayModeBtn.textContent = '🔁';
+                fullscreenPlayModeBtn.title = '顺序播放';
+            } else if (playMode === 'loop') {
+                fullscreenPlayModeBtn.textContent = '🔂';
+                fullscreenPlayModeBtn.title = '单曲循环';
+            } else if (playMode === 'random') {
+                fullscreenPlayModeBtn.textContent = '🔀';
+                fullscreenPlayModeBtn.title = '随机播放';
+            }
+        }
+
+        // 同步更新两个播放器的进度
+        function updateBothProgressBars(progress, currentTimeText, durationText) {
+            progressBar.value = progress;
+            fullscreenProgressBar.value = progress;
+            currentTimeSpan.textContent = currentTimeText;
+            fullscreenCurrentTime.textContent = currentTimeText;
+            durationSpan.textContent = durationText;
+            fullscreenDuration.textContent = durationText;
+        }
+
+        // 同步更新两个播放器的播放/暂停按钮
+        function updateBothPlayPauseButtons(isPlaying) {
+            const icon = isPlaying ? '⏸' : '▶️';
+            playPauseBtn.textContent = icon;
+            fullscreenPlayPauseBtn.textContent = icon;
+        }
+
+        // 同步更新两个播放器的标题
+        function updateBothTitles(title) {
+            playerTitle.textContent = title;
+            fullscreenTitle.textContent = title;
         }
 
         // 定期保存播放进度
@@ -996,6 +1356,49 @@
             }
         });
 
+        // ============ Android 原生播放器回调 ============
+        // 接收来自 Android 原生播放器的状态更新
+        window.onNativePlaybackStateChanged = function(stateJson) {
+            try {
+                const state = JSON.parse(stateJson);
+                console.log('收到原生播放器状态更新:', state);
+
+                // 更新播放/暂停按钮
+                updateBothPlayPauseButtons(state.isPlaying);
+
+                // 更新曲目标题
+                if (state.currentTrack && state.currentTrack.title) {
+                    updateBothTitles(state.currentTrack.title);
+                }
+
+                // 更新进度条和时间显示
+                if (state.duration > 0) {
+                    nativeDuration = state.duration;
+                    nativePosition = state.currentPosition || 0;
+
+                    // 更新两个播放器的进度条
+                    const progress = (nativePosition / nativeDuration) * 100;
+                    const currentTimeText = formatTime(nativePosition / 1000);
+                    const durationText = formatTime(nativeDuration / 1000);
+                    updateBothProgressBars(progress, currentTimeText, durationText);
+                }
+
+                // 显示播放器
+                miniPlayer.classList.add('active');
+                document.body.classList.add('player-active');
+                isNativePlaying = true;
+
+            } catch (error) {
+                console.error('解析原生播放器状态失败:', error);
+            }
+        };
+
+        // 接收来自 Android 原生播放器的错误通知
+        window.onNativePlaybackError = function() {
+            console.error('原生播放器发生错误');
+            updateBothPlayPauseButtons(false);
+        };
+
         // 格式化时间
         function formatTime(seconds) {
             const mins = Math.floor(seconds / 60);
@@ -1007,21 +1410,53 @@
         audioPlayer.addEventListener('timeupdate', () => {
             if (audioPlayer.duration) {
                 const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
-                progressBar.value = progress;
-                currentTimeSpan.textContent = formatTime(audioPlayer.currentTime);
+                const currentTimeText = formatTime(audioPlayer.currentTime);
+                const durationText = formatTime(audioPlayer.duration);
+                updateBothProgressBars(progress, currentTimeText, durationText);
             }
         });
 
         // 加载元数据时更新总时长
         audioPlayer.addEventListener('loadedmetadata', () => {
-            durationSpan.textContent = formatTime(audioPlayer.duration);
+            const durationText = formatTime(audioPlayer.duration);
+            durationSpan.textContent = durationText;
+            fullscreenDuration.textContent = durationText;
         });
 
-        // 进度条拖动
-        progressBar.addEventListener('input', (e) => {
-            const time = (e.target.value / 100) * audioPlayer.duration;
-            audioPlayer.currentTime = time;
-        });
+        // 进度条拖动处理函数
+        function handleProgressBarInput(e) {
+            if (isAndroidApp && isNativePlaying) {
+                // 使用 Android 原生播放器的 seekTo
+                if (nativeDuration > 0) {
+                    try {
+                        const percent = e.target.value / 100;
+                        const positionMs = Math.floor(percent * nativeDuration);
+                        Android.seekTo(positionMs);
+                        // 立即更新时间显示
+                        const timeText = formatTime(positionMs / 1000);
+                        currentTimeSpan.textContent = timeText;
+                        fullscreenCurrentTime.textContent = timeText;
+                        // 同步另一个进度条
+                        progressBar.value = e.target.value;
+                        fullscreenProgressBar.value = e.target.value;
+                    } catch (error) {
+                        console.error('调用 Android seekTo 失败:', error);
+                    }
+                }
+            } else {
+                const time = (e.target.value / 100) * audioPlayer.duration;
+                audioPlayer.currentTime = time;
+                // 同步另一个进度条
+                progressBar.value = e.target.value;
+                fullscreenProgressBar.value = e.target.value;
+            }
+        }
+
+        // 迷你播放器进度条拖动
+        progressBar.addEventListener('input', handleProgressBarInput);
+
+        // 全屏播放器进度条拖动
+        fullscreenProgressBar.addEventListener('input', handleProgressBarInput);
 
         // 自动播放下一首
         audioPlayer.addEventListener('ended', () => {
@@ -1040,12 +1475,12 @@
 
         // 播放状态变化
         audioPlayer.addEventListener('play', () => {
-            playPauseBtn.textContent = '⏸';
+            updateBothPlayPauseButtons(true);
             savePlayerState();
         });
 
         audioPlayer.addEventListener('pause', () => {
-            playPauseBtn.textContent = '▶️';
+            updateBothPlayPauseButtons(false);
             savePlayerState();
         });
 

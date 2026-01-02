@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Netdisk</string>
+    <string name="settings">Settings</string>
+    <string name="server_url">Server URL</string>
+    <string name="server_port">Port</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="playing">Playing</string>
+    <string name="paused">Paused</string>
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="server_config_saved">Server configuration saved</string>
+    <string name="invalid_url">Invalid URL</string>
+    <string name="default_server_host">192.168.1.100</string>
+    <string name="default_server_port">5003</string>
+    <string name="notification_channel_name">Media Playback</string>
+    <string name="notification_channel_description">Media playback controls</string>
+</resources>

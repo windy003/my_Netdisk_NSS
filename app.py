@@ -34,6 +34,39 @@ CONFIG = {
 
 app.config['MAX_CONTENT_LENGTH'] = CONFIG['MAX_UPLOAD_SIZE']
 
+# Token 存储 (username -> token 映射)
+# 在生产环境中应该使用数据库,这里为了简单使用内存字典
+USER_TOKENS = {}
+
+
+def generate_stream_token(username):
+    """为用户生成流媒体访问 token"""
+    token = secrets.token_urlsafe(32)  # 生成安全的随机 token
+    USER_TOKENS[username] = {
+        'token': token,
+        'created_at': datetime.now()
+    }
+    return token
+
+
+def verify_stream_token(token):
+    """验证 token 是否有效"""
+    if not token:
+        return False
+
+    # 检查 token 是否存在且未过期(7天有效期)
+    for username, token_data in USER_TOKENS.items():
+        if token_data['token'] == token:
+            # 检查是否过期
+            if datetime.now() - token_data['created_at'] < timedelta(days=7):
+                return True
+            else:
+                # Token 过期,删除它
+                del USER_TOKENS[username]
+                return False
+
+    return False
+
 
 def login_required(f):
     """登录验证装饰器"""
@@ -267,6 +300,11 @@ def login():
         if username == CONFIG['USERNAME'] and check_password_hash(CONFIG['PASSWORD_HASH'], password):
             session.permanent = True  # 设置为持久会话
             session['logged_in'] = True
+            session['username'] = username  # 保存用户名
+
+            # 为用户生成流媒体访问 token
+            generate_stream_token(username)
+
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
         else:
@@ -279,7 +317,35 @@ def login():
 def logout():
     """登出"""
     session.pop('logged_in', None)
+    session.pop('username', None)
     return redirect(url_for('login'))
+
+
+@app.route('/api/get_stream_token')
+@login_required
+def get_stream_token_api():
+    """获取流媒体访问 token (API)"""
+    # 单用户应用,直接使用配置中的用户名
+    username = CONFIG['USERNAME']
+
+    # 获取或生成 token
+    if username in USER_TOKENS:
+        token_data = USER_TOKENS[username]
+        # 检查是否过期
+        if datetime.now() - token_data['created_at'] < timedelta(days=7):
+            token = token_data['token']
+        else:
+            # 过期了,生成新的
+            token = generate_stream_token(username)
+    else:
+        # 没有 token,生成新的
+        token = generate_stream_token(username)
+
+    return jsonify({
+        'success': True,
+        'token': token,
+        'expires_in_days': 7
+    })
 
 
 @app.route('/')
@@ -414,9 +480,23 @@ def view(filepath):
 
 
 @app.route('/stream/<path:filepath>')
-@login_required
 def stream(filepath):
-    """流式传输媒体文件"""
+    """流式传输媒体文件 - 支持 Cookie 和 Token 认证"""
+    # 首先检查 URL 参数中的 token
+    token = request.args.get('token')
+
+    # Token 认证
+    if token and verify_stream_token(token):
+        # Token 有效,允许访问
+        pass
+    # Cookie 认证(浏览器访问)
+    elif session.get('logged_in'):
+        # 已登录,允许访问
+        pass
+    else:
+        # 两种认证都失败
+        abort(403, 'Unauthorized: Invalid or missing token')
+
     file_path = get_safe_path(filepath)
 
     if not file_path.exists() or not file_path.is_file():

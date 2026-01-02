@@ -1,1 +1,1 @@
-start /b pythonw D:\files\using\my_Netdisk\app.py
+start /b pythonw "D:\files\using\my_Netdisk_NSS\app.py"
