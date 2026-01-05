@@ -29,6 +29,39 @@ source_path = r"D:\files\myNetdisk"
 # 目标路径
 destination_path = 'gdrive:/sync/x13y-gen2/my_netdisk'
 
+def dedupe_gdrive():
+    """
+    清理 Google Drive 上的重复文件
+    """
+    dedupe_command = [
+        'rclone',
+        'dedupe',
+        '--dedupe-mode', 'newest',  # 保留最新的文件
+        destination_path
+    ]
+
+    try:
+        logging.info(f"开始清理重复文件: {destination_path}")
+        process = subprocess.run(
+            dedupe_command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        logging.info("重复文件清理完成")
+        if process.stdout.strip():
+            logging.info(f"清理结果: {process.stdout}")
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"清理重复文件失败: {e}")
+        logging.error(f"错误输出: {e.stderr}")
+        return False
+
+
 def sync_to_gdrive():
     """
     使用rclone将我的网盘文件同步到Google Drive
@@ -37,16 +70,17 @@ def sync_to_gdrive():
     if not os.path.exists(source_path):
         logging.error(f"源文件不存在: {source_path}")
         return False
-    
+
     # 构建rclone命令
     rclone_command = [
-        'rclone', 
-        'sync', 
-        source_path, 
+        'rclone',
+        'sync',
+        source_path,
         destination_path,
-        '--progress'  # 显示进度
+        '--progress',  # 显示进度
+        '-v'  # 详细输出
     ]
-    
+
     try:
         # 执行命令
         logging.info(f"开始同步: {source_path} -> {destination_path}")
@@ -62,8 +96,12 @@ def sync_to_gdrive():
         )
 
         # 记录输出
-        logging.info(f"同步成功完成")
+        logging.info("同步成功完成")
         logging.debug(f"命令输出: {process.stdout}")
+
+        # 同步完成后清理重复文件
+        dedupe_gdrive()
+
         return True
 
     except subprocess.CalledProcessError as e:
