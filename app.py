@@ -2,6 +2,8 @@ import os
 import re
 import secrets
 import json
+import threading
+import time
 from pathlib import Path
 from functools import wraps
 from datetime import timedelta, datetime
@@ -293,6 +295,32 @@ def clean_old_items():
         save_metadata(metadata)
 
     return len(items_to_remove)
+
+
+# ============ 自动清理后台任务 ============
+
+def auto_clean_recycle_bin():
+    """后台自动清理回收站的线程函数"""
+    # 清理间隔：每小时检查一次
+    CLEAN_INTERVAL = 3600  # 秒
+
+    while True:
+        try:
+            deleted_count = clean_old_items()
+            if deleted_count > 0:
+                print(f"[自动清理] 已清理 {deleted_count} 个过期的回收站项目")
+        except Exception as e:
+            print(f"[自动清理] 清理失败: {e}")
+
+        # 等待下一次清理
+        time.sleep(CLEAN_INTERVAL)
+
+
+def start_auto_clean_thread():
+    """启动自动清理后台线程"""
+    clean_thread = threading.Thread(target=auto_clean_recycle_bin, daemon=True)
+    clean_thread.start()
+    print("[自动清理] 回收站自动清理服务已启动（每小时检查一次）")
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -1001,5 +1029,11 @@ if __name__ == '__main__':
     print("\n按 Ctrl+C 停止服务器")
     print("=" * 50)
     print()
+
+    # 启动回收站自动清理后台服务
+    # 注意：在 debug 模式下，使用 use_reloader=False 或检查 WERKZEUG_RUN_MAIN
+    # 以避免启动两个清理线程
+    if not CONFIG['DEBUG'] or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        start_auto_clean_thread()
 
     app.run(host=CONFIG['HOST'], port=CONFIG['PORT'], debug=CONFIG['DEBUG'])
