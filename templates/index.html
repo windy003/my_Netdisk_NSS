@@ -318,6 +318,114 @@
             background: #138496;
         }
 
+        /* 多选模式相关样式 */
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn-warning.active {
+            background: #ff9800;
+            box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.5);
+        }
+
+        .multi-select-checkbox {
+            display: none;
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            cursor: pointer;
+            accent-color: var(--accent-color);
+            flex-shrink: 0;
+        }
+
+        .multi-select-mode .multi-select-checkbox {
+            display: block;
+        }
+
+        .multi-select-mode .file-item {
+            cursor: pointer;
+        }
+
+        .multi-select-mode .file-item.selected {
+            background: rgba(102, 126, 234, 0.15);
+            border-left: 3px solid var(--accent-color);
+        }
+
+        .multi-select-mode .file-item:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .multi-select-mode .file-item.selected:hover {
+            background: rgba(102, 126, 234, 0.2);
+        }
+
+        /* 批量操作工具栏 */
+        .batch-actions {
+            display: none;
+            background: var(--accent-gradient);
+            padding: 12px 20px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .batch-actions.active {
+            display: flex;
+        }
+
+        .batch-actions .selection-info {
+            color: white;
+            font-weight: 500;
+            margin-right: auto;
+        }
+
+        .batch-actions .btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .batch-actions .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .batch-actions .btn-batch-danger {
+            background: rgba(220, 53, 69, 0.8);
+            border-color: rgba(220, 53, 69, 0.9);
+        }
+
+        .batch-actions .btn-batch-danger:hover {
+            background: rgba(220, 53, 69, 1);
+        }
+
+        /* 网格视图下的多选样式 */
+        .file-list.grid-view.multi-select-mode .multi-select-checkbox {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 10;
+            width: 22px;
+            height: 22px;
+            margin: 0;
+        }
+
+        .file-list.grid-view.multi-select-mode .file-item {
+            position: relative;
+        }
+
+        .file-list.grid-view.multi-select-mode .file-item.selected {
+            border-left: none;
+            box-shadow: 0 0 0 3px var(--accent-color);
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -965,10 +1073,22 @@
             <button class="btn btn-primary" onclick="openUploadModal()">上传文件</button>
             <button class="btn btn-success" onclick="openMkdirModal()">创建文件夹</button>
             <button class="btn search-btn" id="searchToggleBtn" onclick="toggleSearch()">🔍 搜索文件</button>
+            <button class="btn btn-warning" id="multiSelectBtn" onclick="toggleMultiSelectMode()">☑ 多选</button>
             <div style="margin-left: auto; display: flex; gap: 5px; align-items: center;">
                 <button class="btn btn-secondary" id="listViewBtn" onclick="switchView('list')" title="列表视图">☰</button>
                 <button class="btn btn-secondary" id="gridViewBtn" onclick="switchView('grid')" title="网格视图">⊞</button>
             </div>
+        </div>
+
+        <!-- 批量操作工具栏 -->
+        <div class="batch-actions" id="batchActions">
+            <span class="selection-info"><span id="selectedCount">0</span> 项已选择</span>
+            <button class="btn" onclick="selectAllItems()">全选</button>
+            <button class="btn" onclick="deselectAllItems()">取消全选</button>
+            <button class="btn" onclick="batchDownload()">下载</button>
+            <button class="btn" onclick="batchCopy()">复制</button>
+            <button class="btn" onclick="batchCut()">剪切</button>
+            <button class="btn btn-batch-danger" onclick="batchDelete()">删除</button>
         </div>
 
         <!-- 搜索展开区域 -->
@@ -992,7 +1112,8 @@
         <div class="file-list">
             {% if items %}
                 {% for item in items %}
-                    <div class="file-item" data-type="{{ item.file_type if not item.is_dir else 'folder' }}">
+                    <div class="file-item" data-type="{{ item.file_type if not item.is_dir else 'folder' }}" data-path="{{ item.path }}" data-name="{{ item.name }}">
+                        <input type="checkbox" class="multi-select-checkbox" onclick="event.stopPropagation(); onItemCheckboxChange(this);">
                         {% if item.file_type == 'image' %}
                             <img class="file-thumbnail" src="{{ url_for('stream', filepath=item.path) }}" alt="{{ item.name }}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                         {% endif %}
@@ -1117,12 +1238,22 @@
             <h3>上传文件</h3>
             <form id="uploadForm">
                 <div class="form-group">
-                    <label for="fileInput">选择文件</label>
-                    <input type="file" id="fileInput" name="file" required>
+                    <label for="fileInput">选择文件（支持多选）</label>
+                    <input type="file" id="fileInput" name="file" multiple required>
+                    <div id="selectedFilesInfo" style="margin-top: 8px; font-size: 14px; color: #666;"></div>
+                </div>
+                <div id="uploadProgress" style="display: none; margin-bottom: 15px;">
+                    <div style="margin-bottom: 5px;">
+                        <span id="uploadProgressText">正在上传...</span>
+                    </div>
+                    <div style="background: #e0e0e0; border-radius: 4px; height: 20px; overflow: hidden;">
+                        <div id="uploadProgressBar" style="background: #4CAF50; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                    <div id="uploadFileList" style="margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 13px;"></div>
                 </div>
                 <div class="modal-buttons">
                     <button type="button" class="btn btn-secondary" onclick="closeUploadModal()">取消</button>
-                    <button type="submit" class="btn btn-primary">上传</button>
+                    <button type="submit" class="btn btn-primary" id="uploadSubmitBtn">上传</button>
                 </div>
             </form>
         </div>
@@ -1185,6 +1316,250 @@
 
     <script>
         const currentPath = "{{ current_path }}";
+
+        // ============ 多选模式功能 ============
+        let isMultiSelectMode = false;
+        let selectedItems = new Set(); // 存储选中项的路径
+
+        function toggleMultiSelectMode() {
+            isMultiSelectMode = !isMultiSelectMode;
+            const fileList = document.querySelector('.file-list');
+            const multiSelectBtn = document.getElementById('multiSelectBtn');
+            const batchActions = document.getElementById('batchActions');
+
+            if (isMultiSelectMode) {
+                fileList.classList.add('multi-select-mode');
+                multiSelectBtn.classList.add('active');
+                multiSelectBtn.textContent = '✓ 多选中';
+                // 为每个文件项添加点击事件
+                document.querySelectorAll('.file-item').forEach(item => {
+                    item.addEventListener('click', onFileItemClick);
+                });
+            } else {
+                fileList.classList.remove('multi-select-mode');
+                multiSelectBtn.classList.remove('active');
+                multiSelectBtn.textContent = '☑ 多选';
+                batchActions.classList.remove('active');
+                // 清除所有选中状态
+                deselectAllItems();
+                // 移除点击事件
+                document.querySelectorAll('.file-item').forEach(item => {
+                    item.removeEventListener('click', onFileItemClick);
+                });
+            }
+        }
+
+        function onFileItemClick(e) {
+            // 如果点击的是链接、按钮或复选框，不处理
+            if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' ||
+                e.target.type === 'checkbox' || e.target.closest('.file-actions') ||
+                e.target.closest('.menu-btn')) {
+                return;
+            }
+
+            const item = e.currentTarget;
+            const checkbox = item.querySelector('.multi-select-checkbox');
+            checkbox.checked = !checkbox.checked;
+            onItemCheckboxChange(checkbox);
+        }
+
+        function onItemCheckboxChange(checkbox) {
+            const item = checkbox.closest('.file-item');
+            const path = item.dataset.path;
+
+            if (checkbox.checked) {
+                item.classList.add('selected');
+                selectedItems.add(path);
+            } else {
+                item.classList.remove('selected');
+                selectedItems.delete(path);
+            }
+
+            updateBatchActionsBar();
+        }
+
+        function updateBatchActionsBar() {
+            const batchActions = document.getElementById('batchActions');
+            const selectedCount = document.getElementById('selectedCount');
+
+            selectedCount.textContent = selectedItems.size;
+
+            if (selectedItems.size > 0) {
+                batchActions.classList.add('active');
+            } else {
+                batchActions.classList.remove('active');
+            }
+        }
+
+        function selectAllItems() {
+            document.querySelectorAll('.file-item:not(.hidden)').forEach(item => {
+                const checkbox = item.querySelector('.multi-select-checkbox');
+                checkbox.checked = true;
+                item.classList.add('selected');
+                selectedItems.add(item.dataset.path);
+            });
+            updateBatchActionsBar();
+        }
+
+        function deselectAllItems() {
+            document.querySelectorAll('.file-item').forEach(item => {
+                const checkbox = item.querySelector('.multi-select-checkbox');
+                checkbox.checked = false;
+                item.classList.remove('selected');
+            });
+            selectedItems.clear();
+            updateBatchActionsBar();
+        }
+
+        function getSelectedItemsInfo() {
+            const items = [];
+            selectedItems.forEach(path => {
+                const item = document.querySelector(`.file-item[data-path="${CSS.escape(path)}"]`);
+                if (item) {
+                    items.push({
+                        path: path,
+                        name: item.dataset.name
+                    });
+                }
+            });
+            return items;
+        }
+
+        // 批量复制
+        function batchCopy() {
+            const items = getSelectedItemsInfo();
+            if (items.length === 0) {
+                showAlert('请先选择要复制的文件', 'error');
+                return;
+            }
+
+            clipboard = {
+                operation: 'copy',
+                path: null,
+                name: null,
+                items: items,
+                isBatch: true
+            };
+
+            openFolderSelectModal();
+        }
+
+        // 批量剪切
+        function batchCut() {
+            const items = getSelectedItemsInfo();
+            if (items.length === 0) {
+                showAlert('请先选择要剪切的文件', 'error');
+                return;
+            }
+
+            clipboard = {
+                operation: 'cut',
+                path: null,
+                name: null,
+                items: items,
+                isBatch: true
+            };
+
+            openFolderSelectModal();
+        }
+
+        // 批量删除
+        async function batchDelete() {
+            const items = getSelectedItemsInfo();
+            if (items.length === 0) {
+                showAlert('请先选择要删除的文件', 'error');
+                return;
+            }
+
+            const names = items.map(i => i.name).join(', ');
+            if (!confirm(`确定要删除以下 ${items.length} 个项目吗？\n${names}`)) {
+                return;
+            }
+
+            let successCount = 0;
+            let failCount = 0;
+            const failedItems = [];
+
+            for (const item of items) {
+                const formData = new FormData();
+                formData.append('path', item.path);
+
+                try {
+                    const response = await fetch('/delete', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                        failedItems.push(item.name);
+                    }
+                } catch (error) {
+                    failCount++;
+                    failedItems.push(item.name);
+                }
+            }
+
+            if (failCount === 0) {
+                showAlert(`成功删除 ${successCount} 个项目`, 'success');
+            } else if (successCount === 0) {
+                showAlert(`删除失败: ${failedItems.join(', ')}`, 'error');
+            } else {
+                showAlert(`删除完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, 'warning');
+            }
+
+            setTimeout(() => location.reload(), 1000);
+        }
+
+        // 批量下载
+        function batchDownload() {
+            const items = getSelectedItemsInfo();
+            if (items.length === 0) {
+                showAlert('请先选择要下载的文件', 'error');
+                return;
+            }
+
+            // 过滤掉文件夹，只下载文件
+            const fileItems = [];
+            const folderItems = [];
+
+            items.forEach(item => {
+                const element = document.querySelector(`.file-item[data-path="${CSS.escape(item.path)}"]`);
+                if (element && element.dataset.type === 'folder') {
+                    folderItems.push(item.name);
+                } else {
+                    fileItems.push(item);
+                }
+            });
+
+            if (folderItems.length > 0) {
+                showAlert(`文件夹不支持批量下载，已跳过: ${folderItems.join(', ')}`, 'warning');
+            }
+
+            if (fileItems.length === 0) {
+                showAlert('没有可下载的文件', 'error');
+                return;
+            }
+
+            showAlert(`开始下载 ${fileItems.length} 个文件...`, 'success');
+
+            // 逐个触发下载，添加延迟避免浏览器阻止
+            fileItems.forEach((item, index) => {
+                setTimeout(() => {
+                    const link = document.createElement('a');
+                    link.href = `/download/${encodeURIComponent(item.path)}`;
+                    link.download = item.name;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }, index * 500); // 每个文件间隔500ms
+            });
+        }
 
         // ============ 搜索功能 ============
         function toggleSearch() {
@@ -1795,7 +2170,9 @@
         let clipboard = {
             operation: null, // 'copy' or 'cut'
             path: null,
-            name: null
+            name: null,
+            items: null, // 批量操作时的项目列表
+            isBatch: false // 是否是批量操作
         };
 
         // 当前选择的目标路径
@@ -1806,7 +2183,9 @@
             clipboard = {
                 operation: 'copy',
                 path: path,
-                name: name
+                name: name,
+                items: null,
+                isBatch: false
             };
             openFolderSelectModal();
         }
@@ -1816,7 +2195,9 @@
             clipboard = {
                 operation: 'cut',
                 path: path,
-                name: name
+                name: name,
+                items: null,
+                isBatch: false
             };
             openFolderSelectModal();
         }
@@ -1824,7 +2205,15 @@
         // 打开文件夹选择模态框
         function openFolderSelectModal() {
             const operationText = clipboard.operation === 'copy' ? '复制' : '剪切';
-            document.getElementById('operationInfo').textContent = `${operationText} "${clipboard.name}"`;
+            // 支持批量操作显示
+            if (clipboard.isBatch && clipboard.items) {
+                const count = clipboard.items.length;
+                const names = clipboard.items.map(i => i.name).slice(0, 3).join(', ');
+                const suffix = count > 3 ? ` 等 ${count} 个项目` : '';
+                document.getElementById('operationInfo').textContent = `${operationText} ${names}${suffix}`;
+            } else {
+                document.getElementById('operationInfo').textContent = `${operationText} "${clipboard.name}"`;
+            }
             selectedDestPath = '';
             loadFolderContents('');
             document.getElementById('folderSelectModal').classList.add('active');
@@ -1882,6 +2271,12 @@
 
         // 确认粘贴
         async function confirmPaste() {
+            // 检查是否是批量操作
+            if (clipboard.isBatch && clipboard.items) {
+                await executeBatchPaste();
+                return;
+            }
+
             if (!clipboard.operation || !clipboard.path) {
                 showAlert('剪贴板为空', 'error');
                 return;
@@ -1910,6 +2305,59 @@
             } catch (error) {
                 showAlert('操作失败: ' + error.message, 'error');
             }
+        }
+
+        // 执行批量粘贴操作
+        async function executeBatchPaste() {
+            const items = clipboard.items;
+            const operation = clipboard.operation;
+            const endpoint = operation === 'copy' ? '/copy' : '/move';
+            const operationText = operation === 'copy' ? '复制' : '移动';
+
+            let successCount = 0;
+            let failCount = 0;
+            const failedItems = [];
+
+            for (const item of items) {
+                const formData = new FormData();
+                formData.append('source_path', item.path);
+                formData.append('dest_path', selectedDestPath);
+
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                        failedItems.push(item.name);
+                    }
+                } catch (error) {
+                    failCount++;
+                    failedItems.push(item.name);
+                }
+            }
+
+            closeFolderSelectModal();
+
+            if (failCount === 0) {
+                showAlert(`成功${operationText} ${successCount} 个项目`, 'success');
+            } else if (successCount === 0) {
+                showAlert(`${operationText}失败: ${failedItems.join(', ')}`, 'error');
+            } else {
+                showAlert(`${operationText}完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, 'warning');
+            }
+
+            // 清空剪贴板和选择
+            clipboard = { operation: null, path: null, name: null };
+            deselectAllItems();
+
+            setTimeout(() => location.reload(), 1000);
         }
 
         // 视图切换功能
@@ -2059,6 +2507,15 @@
         function closeUploadModal() {
             document.getElementById('uploadModal').classList.remove('active');
             document.getElementById('uploadForm').reset();
+            // 重置上传进度显示
+            document.getElementById('uploadProgress').style.display = 'none';
+            document.getElementById('uploadProgressBar').style.width = '0%';
+            document.getElementById('uploadProgressBar').style.background = '#4CAF50';
+            document.getElementById('uploadProgressText').textContent = '正在上传...';
+            document.getElementById('uploadFileList').innerHTML = '';
+            document.getElementById('selectedFilesInfo').textContent = '';
+            document.getElementById('uploadSubmitBtn').disabled = false;
+            document.getElementById('uploadSubmitBtn').textContent = '上传';
         }
 
         function openMkdirModal() {
@@ -2070,62 +2527,137 @@
             document.getElementById('mkdirForm').reset();
         }
 
+        // 文件选择后显示选中的文件列表
+        document.getElementById('fileInput').addEventListener('change', function() {
+            const files = this.files;
+            const infoDiv = document.getElementById('selectedFilesInfo');
+            if (files.length === 0) {
+                infoDiv.textContent = '';
+            } else if (files.length === 1) {
+                const size = (files[0].size / 1024 / 1024).toFixed(2);
+                infoDiv.textContent = `已选择: ${files[0].name} (${size} MB)`;
+            } else {
+                let totalSize = 0;
+                for (let f of files) totalSize += f.size;
+                infoDiv.textContent = `已选择 ${files.length} 个文件，共 ${(totalSize / 1024 / 1024).toFixed(2)} MB`;
+            }
+        });
+
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const file = document.getElementById('fileInput').files[0];
-            console.log('=== 开始上传文件 ===');
-            console.log('文件名:', file.name);
-            console.log('文件大小:', (file.size / 1024 / 1024).toFixed(2), 'MB');
-            console.log('开始时间:', new Date().toLocaleTimeString());
+            const files = document.getElementById('fileInput').files;
+            if (files.length === 0) {
+                showAlert('请选择文件', 'error');
+                return;
+            }
 
-            const uploadStartTime = performance.now();
+            const totalFiles = files.length;
+            let successCount = 0;
+            let failCount = 0;
+            const failedFiles = [];
 
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('path', currentPath);
+            // 显示进度区域
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressText = document.getElementById('uploadProgressText');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const fileListDiv = document.getElementById('uploadFileList');
+            const submitBtn = document.getElementById('uploadSubmitBtn');
 
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
+            progressDiv.style.display = 'block';
+            submitBtn.disabled = true;
+            submitBtn.textContent = '上传中...';
+            fileListDiv.innerHTML = '';
 
-                const uploadEndTime = performance.now();
-                const uploadDuration = ((uploadEndTime - uploadStartTime) / 1000).toFixed(2);
+            // 初始化文件列表显示
+            for (let i = 0; i < totalFiles; i++) {
+                const fileItem = document.createElement('div');
+                fileItem.id = `upload-file-${i}`;
+                fileItem.style.padding = '3px 0';
+                fileItem.innerHTML = `<span style="color: #999;">⏳</span> ${files[i].name}`;
+                fileListDiv.appendChild(fileItem);
+            }
 
-                console.log('上传完成时间:', new Date().toLocaleTimeString());
-                console.log('总耗时:', uploadDuration, '秒');
+            console.log(`=== 开始批量上传 ${totalFiles} 个文件 ===`);
+            const batchStartTime = performance.now();
 
-                const result = await response.json();
+            for (let i = 0; i < totalFiles; i++) {
+                const file = files[i];
+                const fileItem = document.getElementById(`upload-file-${i}`);
 
-                if (result.success) {
-                    // 显示诊断信息
-                    if (result.diagnostics) {
-                        const diag = result.diagnostics;
-                        console.log('=== 服务器性能诊断 ===');
-                        console.log('文件大小:', diag.fileSize);
-                        console.log('服务器接收耗时:', diag.receiveTime);
-                        console.log('磁盘写入耗时:', diag.writeTime);
-                        console.log('服务器总耗时:', diag.totalTime);
-                        console.log('写入速度:', diag.writeSpeed);
-                        console.log('客户端总耗时:', uploadDuration, '秒');
-                        console.log('====================');
+                // 更新进度显示
+                progressText.textContent = `正在上传 (${i + 1}/${totalFiles}): ${file.name}`;
+                progressBar.style.width = `${((i) / totalFiles) * 100}%`;
+                fileItem.innerHTML = `<span style="color: #2196F3;">⬆️</span> ${file.name} - 上传中...`;
 
-                        showAlert(`${result.message}\n查看浏览器控制台(F12)获取详细性能数据`, 'success');
+                console.log(`--- 上传文件 ${i + 1}/${totalFiles}: ${file.name} ---`);
+                console.log('文件大小:', (file.size / 1024 / 1024).toFixed(2), 'MB');
+
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('path', currentPath);
+
+                try {
+                    const uploadStartTime = performance.now();
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const uploadDuration = ((performance.now() - uploadStartTime) / 1000).toFixed(2);
+                    const result = await response.json();
+
+                    if (result.success) {
+                        successCount++;
+                        fileItem.innerHTML = `<span style="color: #4CAF50;">✓</span> ${file.name} - 成功 (${uploadDuration}秒)`;
+                        console.log(`✓ ${file.name} 上传成功，耗时 ${uploadDuration} 秒`);
+                        if (result.diagnostics) {
+                            console.log('  服务器诊断:', result.diagnostics);
+                        }
                     } else {
-                        console.log('上传成功:', result.message);
-                        showAlert(result.message, 'success');
+                        failCount++;
+                        failedFiles.push({ name: file.name, reason: result.message });
+                        fileItem.innerHTML = `<span style="color: #f44336;">✗</span> ${file.name} - 失败: ${result.message}`;
+                        console.error(`✗ ${file.name} 上传失败:`, result.message);
                     }
-                    closeUploadModal();
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    console.error('上传失败:', result.message);
-                    showAlert(result.message, 'error');
+                } catch (error) {
+                    failCount++;
+                    failedFiles.push({ name: file.name, reason: error.message });
+                    fileItem.innerHTML = `<span style="color: #f44336;">✗</span> ${file.name} - 错误: ${error.message}`;
+                    console.error(`✗ ${file.name} 上传错误:`, error);
                 }
-            } catch (error) {
-                console.error('上传错误:', error);
-                showAlert('上传失败: ' + error.message, 'error');
+            }
+
+            // 完成
+            progressBar.style.width = '100%';
+            const batchDuration = ((performance.now() - batchStartTime) / 1000).toFixed(2);
+            console.log(`=== 批量上传完成 ===`);
+            console.log(`成功: ${successCount}, 失败: ${failCount}, 总耗时: ${batchDuration} 秒`);
+
+            // 显示结果
+            if (failCount === 0) {
+                progressText.textContent = `全部上传成功！共 ${successCount} 个文件`;
+                progressBar.style.background = '#4CAF50';
+                showAlert(`成功上传 ${successCount} 个文件`, 'success');
+            } else if (successCount === 0) {
+                progressText.textContent = `上传失败！${failCount} 个文件未能上传`;
+                progressBar.style.background = '#f44336';
+                showAlert(`上传失败：${failedFiles.map(f => f.name).join(', ')}`, 'error');
+            } else {
+                progressText.textContent = `上传完成：成功 ${successCount} 个，失败 ${failCount} 个`;
+                progressBar.style.background = '#FF9800';
+                showAlert(`上传完成：成功 ${successCount} 个，失败 ${failCount} 个`, 'warning');
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = '上传';
+
+            // 如果有成功的文件，延迟刷新页面
+            if (successCount > 0) {
+                setTimeout(() => {
+                    closeUploadModal();
+                    location.reload();
+                }, 1500);
             }
         });
 

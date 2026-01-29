@@ -216,8 +216,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
+        // 首先检查是否在全屏模式
+        if (::webChromeClient.isInitialized && webChromeClient.isInFullscreen()) {
+            webChromeClient.exitFullscreen()
+            return
+        }
+
         if (::webView.isInitialized) {
-            // 首先尝试关闭全屏播放器
+            // 尝试关闭全屏播放器
             webView.evaluateJavascript(
                 """
                 (function() {
