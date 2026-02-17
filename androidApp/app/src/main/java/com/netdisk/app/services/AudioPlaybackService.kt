@@ -272,7 +272,7 @@ class AudioPlaybackService : Service() {
             return
         }
         when (playMode) {
-            PlayMode.RANDOM -> playRandomTrack()
+            PlayMode.RANDOM, PlayMode.LOOP -> playRandomTrack()  // 单曲循环和随机模式下，手动切歌都随机
             else -> playNextTrack()
         }
     }
@@ -282,14 +282,19 @@ class AudioPlaybackService : Service() {
             Log.w(TAG, "playPrevious: playlist is empty")
             return
         }
-        if (currentIndex > 0 && currentIndex < playlist.size) {
-            currentIndex--
-            val track = playlist[currentIndex]
-            playTrack(track.url, track.title)
-        } else if (currentIndex == 0 && playlist.isNotEmpty()) {
-            // 如果在第一首，重新播放当前曲目
-            val track = playlist[0]
-            playTrack(track.url, track.title)
+        when (playMode) {
+            PlayMode.RANDOM, PlayMode.LOOP -> playRandomTrack()  // 单曲循环和随机模式下，手动切歌都随机
+            else -> {
+                if (currentIndex > 0 && currentIndex < playlist.size) {
+                    currentIndex--
+                    val track = playlist[currentIndex]
+                    playTrack(track.url, track.title)
+                } else if (currentIndex == 0 && playlist.isNotEmpty()) {
+                    // 如果在第一首，重新播放当前曲目
+                    val track = playlist[0]
+                    playTrack(track.url, track.title)
+                }
+            }
         }
     }
 

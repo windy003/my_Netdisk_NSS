@@ -476,7 +476,8 @@
         function playPrevious() {
             if (playlist.length <= 1) return;
 
-            if (playMode === 'random') {
+            if (playMode === 'random' || playMode === 'loop') {
+                // 随机模式和单曲循环模式下，手动切歌都随机
                 playRandomTrack();
             } else {
                 let newIndex = currentIndex - 1;
@@ -491,7 +492,8 @@
         function playNext() {
             if (playlist.length <= 1) return;
 
-            if (playMode === 'random') {
+            if (playMode === 'random' || playMode === 'loop') {
+                // 随机模式和单曲循环模式下，手动切歌都随机
                 playRandomTrack();
             } else {
                 let newIndex = currentIndex + 1;
