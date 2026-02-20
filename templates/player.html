@@ -370,7 +370,7 @@
 
             <div class="player-controls">
                 <button class="control-btn" onclick="playPrevious()" title="上一曲">⏮️ 上一曲</button>
-                <button class="control-btn mode-btn" id="modeBtn" onclick="togglePlayMode()" title="切换播放模式">🔁 顺序播放</button>
+                <button class="control-btn mode-btn" id="modeBtn" onclick="togglePlayMode()" title="切换播放模式">🔂 单曲循环</button>
                 <button class="control-btn" onclick="playNext()" title="下一曲">⏭️ 下一曲</button>
             </div>
 
@@ -405,16 +405,30 @@
         // 播放列表数据
         const playlist = {{ playlist | tojson }};
         let currentIndex = {{ current_index }};
-        let playMode = 'sequence'; // sequence: 顺序播放, loop: 单曲循环, random: 随机播放
+        let playMode = 'loop'; // loop: 单曲循环, random: 随机播放
+
+        // 单曲循环模式下的导航历史栈（类似浏览器前进/后退）
+        let loopHistory = [{{ current_index }}];
+        let loopHistPos = 0;
+
+        function initLoopHistory(index) {
+            loopHistory = [index];
+            loopHistPos = 0;
+        }
 
         const player = document.getElementById('mediaPlayer');
         const modeBtn = document.getElementById('modeBtn');
 
-        // 播放指定曲目
-        function playTrack(index) {
+        // 播放指定曲目，manualSelect=true 表示用户手动选曲（重置循环历史）
+        function playTrack(index, manualSelect = true) {
             if (index < 0 || index >= playlist.length) return;
 
             currentIndex = index;
+
+            // 手动点击播放列表时，重置单曲循环的导航历史
+            if (manualSelect && playMode === 'loop') {
+                initLoopHistory(index);
+            }
             const track = playlist[index];
 
             // 检查是否在Android应用中
@@ -472,19 +486,33 @@
             });
         }
 
+        // 随机选一首与当前曲目不同的歌
+        function getRandomIndex() {
+            if (playlist.length <= 1) return currentIndex;
+            let randomIndex;
+            do {
+                randomIndex = Math.floor(Math.random() * playlist.length);
+            } while (randomIndex === currentIndex);
+            return randomIndex;
+        }
+
         // 上一曲
         function playPrevious() {
             if (playlist.length <= 1) return;
 
-            if (playMode === 'random' || playMode === 'loop') {
-                // 随机模式和单曲循环模式下，手动切歌都随机
-                playRandomTrack();
-            } else {
-                let newIndex = currentIndex - 1;
-                if (newIndex < 0) {
-                    newIndex = playlist.length - 1;
+            if (playMode === 'loop') {
+                // 单曲循环模式：有历史则后退，否则随机选一首并加入历史头部
+                if (loopHistPos > 0) {
+                    loopHistPos--;
+                    playTrack(loopHistory[loopHistPos], false);
+                } else {
+                    const randomIndex = getRandomIndex();
+                    loopHistory.unshift(randomIndex);
+                    playTrack(randomIndex, false);
                 }
-                playTrack(newIndex);
+            } else {
+                // 随机模式
+                playRandomTrack();
             }
         }
 
@@ -492,48 +520,44 @@
         function playNext() {
             if (playlist.length <= 1) return;
 
-            if (playMode === 'random' || playMode === 'loop') {
-                // 随机模式和单曲循环模式下，手动切歌都随机
-                playRandomTrack();
-            } else {
-                let newIndex = currentIndex + 1;
-                if (newIndex >= playlist.length) {
-                    newIndex = 0;
+            if (playMode === 'loop') {
+                // 单曲循环模式：历史中有后续则前进，否则随机选一首并追加到历史
+                if (loopHistPos < loopHistory.length - 1) {
+                    loopHistPos++;
+                    playTrack(loopHistory[loopHistPos], false);
+                } else {
+                    const randomIndex = getRandomIndex();
+                    loopHistory.push(randomIndex);
+                    loopHistPos++;
+                    playTrack(randomIndex, false);
                 }
-                playTrack(newIndex);
+            } else {
+                // 随机模式
+                playRandomTrack();
             }
         }
 
         // 随机播放
         function playRandomTrack() {
             if (playlist.length <= 1) return;
-
-            let randomIndex;
-            do {
-                randomIndex = Math.floor(Math.random() * playlist.length);
-            } while (randomIndex === currentIndex);
-
-            playTrack(randomIndex);
+            playTrack(getRandomIndex());
         }
 
         // 切换播放模式
         function togglePlayMode() {
             let modeName = '';
-            if (playMode === 'sequence') {
-                playMode = 'loop';
-                modeBtn.textContent = '🔂 单曲循环';
-                modeBtn.title = '单曲循环';
-                modeName = '🔂 单曲循环';
-            } else if (playMode === 'loop') {
+            if (playMode === 'loop') {
                 playMode = 'random';
                 modeBtn.textContent = '🔀 随机播放';
                 modeBtn.title = '随机播放';
                 modeName = '🔀 随机播放';
             } else {
-                playMode = 'sequence';
-                modeBtn.textContent = '🔁 顺序播放';
-                modeBtn.title = '顺序播放';
-                modeName = '🔁 顺序播放';
+                playMode = 'loop';
+                modeBtn.textContent = '🔂 单曲循环';
+                modeBtn.title = '单曲循环';
+                modeName = '🔂 单曲循环';
+                // 切换到单曲循环模式时，以当前曲目为起点初始化导航历史
+                initLoopHistory(currentIndex);
             }
             modeBtn.classList.add('active');
             setTimeout(() => modeBtn.classList.remove('active'), 300);
@@ -590,14 +614,9 @@
                 // 单曲循环：重新播放当前曲目
                 player.currentTime = 0;
                 player.play();
-            } else if (playMode === 'random') {
+            } else {
                 // 随机播放：播放随机曲目
                 playRandomTrack();
-            } else {
-                // 顺序播放：播放下一曲
-                if (currentIndex < playlist.length - 1) {
-                    playNext();
-                }
             }
         });
 
