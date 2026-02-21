@@ -38,6 +38,10 @@ class AudioPlaybackService : Service() {
     private var currentIndex: Int = -1
     private var playMode: PlayMode = PlayMode.LOOP
 
+    // 单曲循环模式下的导航历史（与 Web 版本保持一致）
+    private val loopHistory = mutableListOf<Int>()
+    private var loopHistPos = -1
+
     private val binder = AudioServiceBinder()
 
     // 用于定期更新进度的 Handler
@@ -86,6 +90,7 @@ class AudioPlaybackService : Service() {
                 playlistJson?.let {
                     playlist = parsePlaylist(it)
                     currentIndex = playlist.indexOfFirst { track -> track.url == url }
+                    initLoopHistory(currentIndex)
                 }
 
                 playTrack(url, title)
@@ -272,7 +277,21 @@ class AudioPlaybackService : Service() {
             return
         }
         when (playMode) {
-            PlayMode.RANDOM, PlayMode.LOOP -> playRandomTrack()  // 单曲循环和随机模式下，手动切歌都随机
+            PlayMode.LOOP -> {
+                // 单曲循环模式：历史中有后续则前进，否则随机选一首并追加到历史
+                if (loopHistPos < loopHistory.size - 1) {
+                    loopHistPos++
+                    currentIndex = loopHistory[loopHistPos]
+                } else {
+                    val randomIndex = getRandomIndex()
+                    loopHistory.add(randomIndex)
+                    loopHistPos++
+                    currentIndex = randomIndex
+                }
+                val track = playlist[currentIndex]
+                playTrack(track.url, track.title)
+            }
+            PlayMode.RANDOM -> playRandomTrack()
             else -> playNextTrack()
         }
     }
@@ -283,7 +302,20 @@ class AudioPlaybackService : Service() {
             return
         }
         when (playMode) {
-            PlayMode.RANDOM, PlayMode.LOOP -> playRandomTrack()  // 单曲循环和随机模式下，手动切歌都随机
+            PlayMode.LOOP -> {
+                // 单曲循环模式：有历史则后退，否则随机选一首并加入历史头部
+                if (loopHistPos > 0) {
+                    loopHistPos--
+                    currentIndex = loopHistory[loopHistPos]
+                } else {
+                    val randomIndex = getRandomIndex()
+                    loopHistory.add(0, randomIndex)
+                    currentIndex = randomIndex
+                }
+                val track = playlist[currentIndex]
+                playTrack(track.url, track.title)
+            }
+            PlayMode.RANDOM -> playRandomTrack()
             else -> {
                 if (currentIndex > 0 && currentIndex < playlist.size) {
                     currentIndex--
@@ -313,9 +345,24 @@ class AudioPlaybackService : Service() {
         }
     }
 
+    private fun getRandomIndex(): Int {
+        if (playlist.size <= 1) return currentIndex
+        var randomIndex: Int
+        do {
+            randomIndex = Random.nextInt(playlist.size)
+        } while (randomIndex == currentIndex)
+        return randomIndex
+    }
+
+    private fun initLoopHistory(index: Int) {
+        loopHistory.clear()
+        if (index >= 0) loopHistory.add(index)
+        loopHistPos = if (loopHistory.isEmpty()) -1 else 0
+    }
+
     private fun playRandomTrack() {
         if (playlist.isNotEmpty()) {
-            currentIndex = Random.nextInt(playlist.size)
+            currentIndex = getRandomIndex()
             val track = playlist[currentIndex]
             playTrack(track.url, track.title)
         } else {
@@ -329,6 +376,10 @@ class AudioPlaybackService : Service() {
             "LOOP" -> PlayMode.LOOP
             "RANDOM" -> PlayMode.RANDOM
             else -> PlayMode.LOOP  // 默认为单曲循环
+        }
+        // 切换到单曲循环模式时，以当前曲目为起点初始化导航历史
+        if (playMode == PlayMode.LOOP) {
+            initLoopHistory(currentIndex)
         }
         notifyWebViewOfStateChange()
         Log.d(TAG, "Play mode changed from $oldMode to $playMode (input: $mode)")
