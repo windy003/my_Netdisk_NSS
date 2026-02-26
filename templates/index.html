@@ -2710,8 +2710,14 @@
             document.getElementById('newNameInput').value = currentName;
             document.getElementById('renamePathInput').value = path;
             document.getElementById('renameModal').classList.add('active');
-            document.getElementById('newNameInput').focus();
-            document.getElementById('newNameInput').select();
+            const input = document.getElementById('newNameInput');
+            input.focus();
+            const dotIndex = currentName.lastIndexOf('.');
+            if (dotIndex > 0) {
+                input.setSelectionRange(0, dotIndex);
+            } else {
+                input.select();
+            }
         }
 
         function closeRenameModal() {
