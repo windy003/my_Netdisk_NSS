@@ -61,23 +61,24 @@ class NetdiskDownloadManager(private val context: Context) {
         }
     }
 
-    fun enqueueDownload(url: String, filename: String): Long {
+    fun enqueueDownload(url: String, filename: String, netdiskPath: String = filename): Long {
         val downloadId = downloadIdCounter.incrementAndGet()
-        Log.d(TAG, "Enqueue download: id=$downloadId, url=$url, filename=$filename")
+        Log.d(TAG, "Enqueue download: id=$downloadId, url=$url, filename=$filename, netdiskPath=$netdiskPath")
 
         // Get cookies for authentication
         val cookies = getCookieHeader(url)
 
-        // Create download directory
-        val downloadDir = File(
+        // Recreate the file's netdisk directory structure under Downloads/Netdisk
+        val rootDir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
             "Netdisk"
         )
-        if (!downloadDir.exists()) {
-            downloadDir.mkdirs()
+        val destFile = resolveDestFile(rootDir, netdiskPath, filename)
+        destFile.parentFile?.let { parent ->
+            if (!parent.exists()) {
+                parent.mkdirs()
+            }
         }
-
-        val destFile = File(downloadDir, filename)
 
         // Save download record
         val record = DownloadRecord(
@@ -265,6 +266,23 @@ class NetdiskDownloadManager(private val context: Context) {
             "zip" -> "application/zip"
             else -> "*/*"
         }
+    }
+
+    /**
+     * Mirrors the file's netdisk directory structure (e.g. "1/2/3/file.ext") under [baseDir],
+     * saving as [filename]. Path traversal segments ("..", ".") and empty segments are dropped
+     * so the resolved file can never escape [baseDir].
+     */
+    private fun resolveDestFile(baseDir: File, netdiskPath: String, filename: String): File {
+        val segments = netdiskPath.replace('\\', '/').split('/')
+            .filter { it.isNotBlank() && it != "." && it != ".." }
+        val dirSegments = if (segments.isNotEmpty()) segments.dropLast(1) else emptyList()
+
+        var dir = baseDir
+        for (segment in dirSegments) {
+            dir = File(dir, segment)
+        }
+        return File(dir, filename)
     }
 
     private fun getCookieHeader(url: String): String {

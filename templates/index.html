@@ -1160,7 +1160,7 @@
                                 {% elif item.file_type == 'image' %}
                                     <a href="{{ url_for('view', filepath=item.path) }}" class="btn btn-success btn-sm">查看</a>
                                 {% endif %}
-                                <a href="{{ url_for('download', filepath=item.path) }}" class="btn btn-info btn-sm" onclick="return handleDownload(event, '{{ url_for('download', filepath=item.path) }}', '{{ item.name }}')">下载</a>
+                                <a href="{{ url_for('download', filepath=item.path) }}" class="btn btn-info btn-sm" onclick="return handleDownload(event, '{{ url_for('download', filepath=item.path) }}', '{{ item.name }}', '{{ item.path }}')">下载</a>
                             {% endif %}
                             <button class="btn btn-info btn-sm" onclick="copyItem('{{ item.path }}', '{{ item.name }}')">复制</button>
                             <button class="btn btn-info btn-sm" onclick="cutItem('{{ item.path }}', '{{ item.name }}')">剪切</button>
@@ -1641,14 +1641,14 @@
         console.log('运行环境:', isAndroidApp ? 'Android App' : 'Web浏览器');
 
         // 处理下载请求
-        function handleDownload(event, url, filename) {
+        function handleDownload(event, url, filename, netdiskPath) {
             if (isAndroidApp && typeof Android.downloadFile === 'function') {
                 event.preventDefault();
                 try {
                     // 获取完整的下载URL
                     const fullUrl = new URL(url, window.location.origin).href;
-                    console.log('调用Android下载:', fullUrl, filename);
-                    Android.downloadFile(fullUrl, filename);
+                    console.log('调用Android下载:', fullUrl, filename, netdiskPath);
+                    Android.downloadFile(fullUrl, filename, netdiskPath || filename);
                     showToast('开始下载: ' + filename);
                     return false;
                 } catch (error) {

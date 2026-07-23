@@ -125,7 +125,8 @@ class MainActivity : AppCompatActivity() {
         webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
             android.util.Log.d("MainActivity", "Download requested: url=$url, mimetype=$mimetype")
             val filename = URLUtil.guessFileName(url, contentDisposition, mimetype)
-            downloadManager.enqueueDownload(url, filename)
+            val netdiskPath = extractNetdiskPathFromUrl(url) ?: filename
+            downloadManager.enqueueDownload(url, filename, netdiskPath)
         }
 
         android.util.Log.d("MainActivity", "Download listener set")
@@ -134,6 +135,23 @@ class MainActivity : AppCompatActivity() {
         restoreCookies()
 
         android.util.Log.d("MainActivity", "setupWebView() completed")
+    }
+
+    /**
+     * Recovers the file's netdisk-relative path (e.g. "1/2/3/file.ext") from a
+     * "/download/<path>" URL, so the native download listener fallback can also
+     * mirror the netdisk directory structure under Downloads/Netdisk.
+     */
+    private fun extractNetdiskPathFromUrl(url: String): String? {
+        return try {
+            val path = android.net.Uri.parse(url).path ?: return null
+            val marker = "/download/"
+            val idx = path.indexOf(marker)
+            if (idx == -1) return null
+            java.net.URLDecoder.decode(path.substring(idx + marker.length), "UTF-8")
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun loadServerUrl() {

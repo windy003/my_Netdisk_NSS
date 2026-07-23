@@ -113,9 +113,14 @@ class JavaScriptBridge(
 
     @JavascriptInterface
     fun downloadFile(url: String, filename: String) {
-        Log.d(TAG, "downloadFile called: url=$url, filename=$filename")
+        downloadFile(url, filename, filename)
+    }
+
+    @JavascriptInterface
+    fun downloadFile(url: String, filename: String, netdiskPath: String) {
+        Log.d(TAG, "downloadFile called: url=$url, filename=$filename, netdiskPath=$netdiskPath")
         try {
-            downloadManager.enqueueDownload(url, filename)
+            downloadManager.enqueueDownload(url, filename, netdiskPath)
         } catch (e: Exception) {
             Log.e(TAG, "Error downloading file", e)
         }
