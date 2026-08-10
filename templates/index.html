@@ -1142,6 +1142,8 @@
                                     <a href="{{ url_for('play', filepath=item.path) }}">{{ item.name }}</a>
                                 {% elif item.file_type == 'image' %}
                                     <a href="{{ url_for('view', filepath=item.path) }}">{{ item.name }}</a>
+                                {% elif item.name.lower().endswith(('.mhtml', '.mht')) %}
+                                    <a href="{{ url_for('download', filepath=item.path) }}" onclick="return handleDownload(event, '{{ url_for('download', filepath=item.path) }}', '{{ item.name }}', '{{ item.path }}')">{{ item.name }}</a>
                                 {% else %}
                                     <a href="{{ url_for('download', filepath=item.path) }}">{{ item.name }}</a>
                                 {% endif %}

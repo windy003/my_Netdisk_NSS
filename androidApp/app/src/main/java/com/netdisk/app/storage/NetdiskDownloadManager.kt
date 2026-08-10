@@ -176,6 +176,10 @@ class NetdiskDownloadManager(private val context: Context) {
 
                     showCompletedNotification(downloadId.toInt(), filename, true, destFile)
 
+                    if (isMhtmlFile(filename)) {
+                        openWithExternalBrowser(destFile, filename)
+                    }
+
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving file: ${e.message}", e)
 
@@ -264,7 +268,54 @@ class NetdiskDownloadManager(private val context: Context) {
             "pdf" -> "application/pdf"
             "txt" -> "text/plain"
             "zip" -> "application/zip"
+            "mhtml", "mht" -> "multipart/related"
             else -> "*/*"
+        }
+    }
+
+    private fun isMhtmlFile(filename: String): Boolean {
+        val extension = filename.substringAfterLast('.', "").lowercase()
+        return extension == "mhtml" || extension == "mht"
+    }
+
+    /**
+     * Opens the downloaded file with an external browser app. WebView's own MHTML
+     * renderer is unreliable for locally saved archives, so this hands off to
+     * whatever browser (e.g. Chrome) the user has installed, via ACTION_VIEW.
+     *
+     * Different browsers register different MIME types for viewing a local
+     * content:// mhtml file (e.g. "text/html" vs "multipart/related"). Querying
+     * with a wildcard MIME type (rather than trying one exact type at a time)
+     * ensures every matching app, regardless of which exact MIME type it declared,
+     * shows up together in a single chooser instead of only the apps that happen
+     * to match whichever exact type is checked first.
+     */
+    private fun openWithExternalBrowser(file: File, filename: String) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+
+            mainHandler.post {
+                val chooserTarget = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "*/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                try {
+                    context.startActivity(
+                        Intent.createChooser(chooserTarget, "选择打开方式").apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(context, "未找到可打开的浏览器，请在\"下载\"列表中手动打开", Toast.LENGTH_LONG).show()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error opening file with external browser: ${e.message}", e)
         }
     }
 
